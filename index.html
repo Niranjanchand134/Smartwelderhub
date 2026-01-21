@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Content Security Policy - Allows unsafe-eval for third-party libraries (jQuery, Bootstrap, OwlCarousel) -->
+    <!-- Note: frame-ancestors only works via HTTP headers, not meta tags -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* https://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https: http:; connect-src 'self' http://localhost:* https://localhost:* http://localhost:8080 https://rc-epay.esewa.com.np https://rc.esewa.com.np; frame-src 'self' https://rc-epay.esewa.com.np; object-src 'none'; base-uri 'self'; form-action 'self' https://rc-epay.esewa.com.np; upgrade-insecure-requests;" />
     <title>package.json</title>
   </head>
   <body>

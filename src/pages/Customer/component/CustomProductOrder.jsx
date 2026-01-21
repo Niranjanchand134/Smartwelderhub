@@ -1,12 +1,15 @@
 // components/CustomProductOrder.js
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../Context/AuthContext';
 import { createCustomOrder, getAllCustomOrders, updateCustomOrder, deleteCustomOrder, cancelCustomOrder } from '../../../services/customOrderService';
+import { getUserDetailsById } from '../../../services/authService';
 import { SuccesfulMessageToast, ErrorMessageToast } from '../../../utils/Tostify.util';
 
 const CustomProductOrder = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { user, authToken } = useAuth();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -31,24 +34,52 @@ const CustomProductOrder = () => {
   const [editingOrder, setEditingOrder] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    if (user && user.id) {
+      fetchOrders();
+      fetchUserProfile();
+    }
+  }, [user]);
+
+  // Auto-populate customer information from user profile when profile is loaded
+  useEffect(() => {
+    if (userProfile && step === 1 && !editingOrder) {
+      setFormData(prev => ({
+        ...prev,
+        customerName: userProfile.fullName || prev.customerName || '',
+        mobileNumber: userProfile.phoneNumber || prev.mobileNumber || ''
+      }));
+    }
+  }, [userProfile, step, editingOrder]);
+
+  const fetchUserProfile = async () => {
+    if (!user || !user.id) return;
+    
+    try {
+      const data = await getUserDetailsById(user.id);
+      setUserProfile(data);
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error);
+    }
+  };
 
   // Check authentication when step changes (prevent direct access to steps 2-7 without login)
   useEffect(() => {
     if (step > 1 && (!authToken || !user)) {
-      ErrorMessageToast('Please login to continue with your custom order');
+      ErrorMessageToast(t('customOrder.pleaseLoginToContinue'));
       setStep(1); // Reset to step 1
       navigate('/login', { state: { returnTo: '/custom-product-order' } });
     }
-  }, [step, authToken, user, navigate]);
+  }, [step, authToken, user, navigate, t]);
 
   // Check authentication before proceeding
   const checkAuthAndProceed = (nextStep) => {
     if (!authToken || !user) {
-      ErrorMessageToast('Please login to continue with your custom order');
+      ErrorMessageToast(t('customOrder.pleaseLoginToContinue'));
       navigate('/login', { state: { returnTo: '/custom-product-order' } });
       return false;
     }
@@ -57,17 +88,61 @@ const CustomProductOrder = () => {
   };
 
   const fetchOrders = async () => {
+    if (!user || !user.id) {
+      setOrders([]);
+      return;
+    }
+    
     try {
       const data = await getAllCustomOrders();
-      setOrders(data || []);
+      
+      // Backend should already filter by customerId, but we add frontend filtering as safety measure
+      const userOrders = (data || []).filter(order => {
+        // Primary: Match by customerId (most reliable for new orders)
+        if (order.customerId && user.id) {
+          return order.customerId === user.id;
+        }
+        
+        // Fallback: Match by customerName for old orders (when customerId is null)
+        // Match order's customerName with user's fullName
+        if (!order.customerId && order.customerName && user.name) {
+          return order.customerName.trim().toLowerCase() === user.name.trim().toLowerCase();
+        }
+        
+        // Also try matching with user.fullName if available
+        if (!order.customerId && order.customerName && user.fullName) {
+          return order.customerName.trim().toLowerCase() === user.fullName.trim().toLowerCase();
+        }
+        
+        return false;
+      });
+      
+      // Sort orders by createdAt date (newest first)
+      const sortedOrders = userOrders.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA; // Descending order (newest first)
+      });
+      
+      setOrders(sortedOrders);
+      // Reset to first page when orders are fetched
+      setCurrentPage(1);
     } catch (error) {
       console.error('Failed to fetch orders:', error);
+      ErrorMessageToast(t('customOrder.failedToLoadOrders'));
+      setOrders([]);
     }
   };
 
   const handleEdit = (order) => {
     const measurements = order.measurementsJson ? JSON.parse(order.measurementsJson) : {};
     const aiDesign = order.aiDesignJson ? JSON.parse(order.aiDesignJson) : null;
+    
+    // If design type is template, get the template image URL
+    let referenceImageUrl = order.referenceImageUrl || null;
+    if (order.designType === 'template' && order.designTemplate && order.productType && !referenceImageUrl) {
+      referenceImageUrl = getDesignTemplateImage(order.productType, order.designTemplate);
+    }
     
     setFormData({
       customerName: order.customerName || '',
@@ -80,6 +155,7 @@ const CustomProductOrder = () => {
       designType: order.designType || 'template',
       designTemplate: order.designTemplate || '',
       referenceImage: null,
+      referenceImageUrl: referenceImageUrl,
       aiDesign: aiDesign,
       estimatedCost: order.estimatedCost || 0
     });
@@ -89,7 +165,7 @@ const CustomProductOrder = () => {
 
   const handleUpdateOrder = async () => {
     if (!formData.customerName || !formData.mobileNumber || !formData.address) {
-      ErrorMessageToast('Please fill in all customer information fields');
+      ErrorMessageToast(t('customOrder.pleaseFillAllFields'));
       return;
     }
 
@@ -105,42 +181,54 @@ const CustomProductOrder = () => {
         materialType: formData.materialType,
         designType: formData.designType,
         designTemplate: formData.designTemplate,
-        referenceImageUrl: formData.referenceImage ? URL.createObjectURL(formData.referenceImage) : editingOrder?.referenceImageUrl,
+        referenceImageUrl: formData.designType === 'upload' && formData.referenceImage 
+          ? await fileToBase64(formData.referenceImage)
+          : (formData.designType === 'template' && formData.referenceImageUrl 
+            ? formData.referenceImageUrl 
+            : editingOrder?.referenceImageUrl),
         aiDesign: formData.aiDesign,
         estimatedCost: formData.estimatedCost
       };
 
       const updatedOrder = await updateCustomOrder(editingOrder.id, orderPayload);
-      SuccesfulMessageToast('Order updated successfully!');
+      SuccesfulMessageToast(t('customOrder.orderUpdatedSuccessfully'));
       setEditingOrder(null);
       startNewOrder();
       await fetchOrders();
     } catch (error) {
-      ErrorMessageToast(error.message || 'Failed to update order');
+      ErrorMessageToast(error.message || t('customOrder.failedToUpdateOrder'));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (order) => {
     try {
-      await deleteCustomOrder(id);
-      SuccesfulMessageToast('Order deleted successfully!');
+      // Check if order can be deleted (PENDING, CANCELLED, or REJECTED orders can be deleted)
+      if (order.status !== 'PENDING' && order.status !== 'CANCELLED' && order.status !== 'REJECTED') {
+        ErrorMessageToast(t('customOrder.onlyPendingCanBeEdited'));
+        setShowDeleteConfirm(null);
+        return;
+      }
+      
+      await deleteCustomOrder(order.id);
+      SuccesfulMessageToast(t('customOrder.orderDeletedSuccessfully'));
       setShowDeleteConfirm(null);
       await fetchOrders();
     } catch (error) {
-      ErrorMessageToast(error.message || 'Failed to delete order');
+      ErrorMessageToast(error.message || t('customOrder.failedToDeleteOrder'));
+      setShowDeleteConfirm(null);
     }
   };
 
   const handleCancel = async (id) => {
     try {
       await cancelCustomOrder(id);
-      SuccesfulMessageToast('Order cancelled successfully!');
+      SuccesfulMessageToast(t('customOrder.orderCancelledSuccessfully'));
       setShowCancelConfirm(null);
       await fetchOrders();
     } catch (error) {
-      ErrorMessageToast(error.message || 'Failed to cancel order');
+      ErrorMessageToast(error.message || t('customOrder.failedToCancelOrder'));
     }
   };
 
@@ -166,6 +254,12 @@ const CustomProductOrder = () => {
         }
       }
 
+      // If design type is template, get the template image URL
+      let referenceImageUrl = order.referenceImageUrl || null;
+      if (order.designType === 'template' && order.designTemplate && order.productType && !referenceImageUrl) {
+        referenceImageUrl = getDesignTemplateImage(order.productType, order.designTemplate);
+      }
+
       // Populate form with cancelled order data
       setFormData({
         customerName: order.customerName || '',
@@ -178,7 +272,7 @@ const CustomProductOrder = () => {
         designType: order.designType || 'template',
         designTemplate: order.designTemplate || '',
         referenceImage: null, // Can't restore file, but URL is stored
-        referenceImageUrl: order.referenceImageUrl || null,
+        referenceImageUrl: referenceImageUrl,
         aiDesign: aiDesign,
         estimatedCost: order.estimatedCost || 0
       });
@@ -194,9 +288,9 @@ const CustomProductOrder = () => {
 
       // Scroll to top of form
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      SuccesfulMessageToast('Order details loaded. You can review and submit a new order.');
+      SuccesfulMessageToast(t('customOrder.orderDetailsLoaded'));
     } catch (error) {
-      ErrorMessageToast('Failed to load order details for re-order');
+      ErrorMessageToast(t('customOrder.failedToLoadOrderDetails'));
       console.error('Re-order error:', error);
     }
   };
@@ -210,6 +304,105 @@ const CustomProductOrder = () => {
   const productTypes = ['Gate', 'Grill', 'Window', 'Table', 'Chair', 'Custom Furniture', 'Staircase', 'Railing'];
   const materialTypes = ['MS (Mild Steel)', 'SS (Stainless Steel)', 'Iron', 'Aluminum'];
   const designTemplates = ['Modern', 'Traditional', 'Minimalist', 'Ornate', 'Industrial', 'Classic'];
+
+  // Product type icon mapping
+  const productTypeIcons = {
+    'Gate': 'fas fa-door-open',
+    'Grill': 'fas fa-fire',
+    'Window': 'fas fa-table',
+    'Table': 'fas fa-window-maximize',
+    'Chair': 'fas fa-chair',
+    'Custom Furniture': 'fas fa-couch',
+    'Staircase': 'fas fa-stairs',
+    'Railing': 'fas fa-xmarks-lines'
+  };
+
+  // Dynamic design template image mapping based on product type
+  // This function returns the appropriate image URL based on product type and design template
+  // Note: Replace these URLs with your local images in assets/image/design-templates/{productType}/{designTemplate}.jpg
+  const getDesignTemplateImage = (productType, designTemplate) => {
+    if (!productType) {
+      // Default to Window if no product type selected
+      productType = 'Window';
+    }
+
+    // Image mapping: productType -> designTemplate -> image URL
+    // Using placeholder images - replace with actual product images
+    const imageMap = {
+      'Window': {
+        'Modern': '../assets/DesignTemplate/window/modernwindow.png',
+        'Traditional': '../assets/DesignTemplate/window/traditionalwindow.png',
+        'Minimalist': '../assets/DesignTemplate/window/minimalistwindow.png',
+        'Ornate': '../assets/DesignTemplate/window/ornatewindow.png',
+        'Industrial': '../assets/DesignTemplate/window/industrialwindow.png',
+        'Classic': '../assets/DesignTemplate/window/classicwindow.png'
+      },
+      'Gate': {
+        'Modern': '../assets/DesignTemplate/gate/moderngate.png',
+        'Traditional': '../assets/DesignTemplate/gate/traditionalgate.png',
+        'Minimalist': '../assets/DesignTemplate/gate/minimalistgate.png',
+        'Ornate': '../assets/DesignTemplate/gate/ornategate.png',
+        'Industrial': '../assets/DesignTemplate/gate/industrialgate.png',
+        'Classic': '../assets/DesignTemplate/gate/classicgate.png'
+      },
+      'Grill': {
+        'Modern': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Traditional': 'https://images.unsplash.com/photo-1600607687644-c7171b42498b?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Minimalist': 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Ornate': 'https://images.unsplash.com/photo-1600607688969-a5fcd6a57f91?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Industrial': 'https://images.unsplash.com/photo-1600607688909-1c99095e0c0a?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Classic': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3'
+      },
+      'Table': {
+        'Modern': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Traditional': 'https://images.unsplash.com/photo-1600607687644-c7171b42498b?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Minimalist': 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Ornate': 'https://images.unsplash.com/photo-1600607688969-a5fcd6a57f91?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Industrial': 'https://images.unsplash.com/photo-1600607688909-1c99095e0c0a?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Classic': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3'
+      },
+      'Chair': {
+        'Modern': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Traditional': 'https://images.unsplash.com/photo-1600607687644-c7171b42498b?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Minimalist': 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Ornate': 'https://images.unsplash.com/photo-1600607688969-a5fcd6a57f91?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Industrial': 'https://images.unsplash.com/photo-1600607688909-1c99095e0c0a?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Classic': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3'
+      },
+      'Custom Furniture': {
+        'Modern': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Traditional': 'https://images.unsplash.com/photo-1600607687644-c7171b42498b?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Minimalist': 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Ornate': 'https://images.unsplash.com/photo-1600607688969-a5fcd6a57f91?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Industrial': 'https://images.unsplash.com/photo-1600607688909-1c99095e0c0a?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Classic': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3'
+      },
+      'Staircase': {
+        'Modern': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Traditional': 'https://images.unsplash.com/photo-1600607687644-c7171b42498b?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Minimalist': 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Ornate': 'https://images.unsplash.com/photo-1600607688969-a5fcd6a57f91?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Industrial': 'https://images.unsplash.com/photo-1600607688909-1c99095e0c0a?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Classic': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3'
+      },
+      'Railing': {
+        'Modern': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Traditional': 'https://images.unsplash.com/photo-1600607687644-c7171b42498b?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Minimalist': 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Ornate': 'https://images.unsplash.com/photo-1600607688969-a5fcd6a57f91?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Industrial': 'https://images.unsplash.com/photo-1600607688909-1c99095e0c0a?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3',
+        'Classic': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop&q=80&ixlib=rb-4.0.3'
+      }
+    };
+
+    // Return the specific image for the product type and design template
+    if (imageMap[productType] && imageMap[productType][designTemplate]) {
+      return imageMap[productType][designTemplate];
+    }
+    
+    // Fallback to a placeholder with product type and design template text
+    return `https://via.placeholder.com/400x300/007bff/ffffff?text=${encodeURIComponent(productType + ' - ' + designTemplate)}`;
+  };
 
   // Handle input changes
   const handleInputChange = (field, value) => {
@@ -270,21 +463,41 @@ const CustomProductOrder = () => {
     setStep(6); // Move to cost review step
   };
 
+  // Convert file to base64
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
+  };
+
   // Submit custom order
   const submitCustomOrder = async () => {
     if (!authToken || !user) {
-      ErrorMessageToast('Please login to submit your custom order');
+      ErrorMessageToast(t('customOrder.pleaseLoginToContinue'));
       navigate('/login', { state: { returnTo: '/custom-product-order' } });
       return;
     }
 
     if (!formData.customerName || !formData.mobileNumber || !formData.address) {
-      ErrorMessageToast('Please fill in all customer information fields');
+      ErrorMessageToast(t('customOrder.pleaseFillAllFields'));
       return;
     }
 
     setLoading(true);
     try {
+      // Prepare reference image URL - either from uploaded file or design template
+      let referenceImageUrl = null;
+      if (formData.designType === 'upload' && formData.referenceImage) {
+        // For uploaded images, convert to base64 data URL for storage
+        referenceImageUrl = await fileToBase64(formData.referenceImage);
+      } else if (formData.designType === 'template' && formData.referenceImageUrl) {
+        // For design templates, use the stored image URL
+        referenceImageUrl = formData.referenceImageUrl;
+      }
+
       const orderPayload = {
         customerName: formData.customerName,
         mobileNumber: formData.mobileNumber,
@@ -295,7 +508,7 @@ const CustomProductOrder = () => {
         materialType: formData.materialType,
         designType: formData.designType,
         designTemplate: formData.designTemplate,
-        referenceImageUrl: formData.referenceImage ? URL.createObjectURL(formData.referenceImage) : null,
+        referenceImageUrl: referenceImageUrl,
         aiDesign: formData.aiDesign,
         estimatedCost: formData.estimatedCost
       };
@@ -303,10 +516,10 @@ const CustomProductOrder = () => {
       const savedOrder = await createCustomOrder(orderPayload);
       setCurrentOrder(savedOrder);
       setStep(7); // Move to success step
-      SuccesfulMessageToast('Order submitted successfully!');
+      SuccesfulMessageToast(t('customOrder.orderSubmittedSuccessfully'));
       await fetchOrders(); // Refresh orders list
     } catch (error) {
-      ErrorMessageToast(error.message || 'Failed to submit order');
+      ErrorMessageToast(error.message || t('customOrder.failedToSubmitOrder'));
     } finally {
       setLoading(false);
     }
@@ -314,9 +527,10 @@ const CustomProductOrder = () => {
 
   // Reset form and start over
   const startNewOrder = () => {
+    // Auto-populate from user profile if available
     setFormData({
-      customerName: '',
-      mobileNumber: '',
+      customerName: userProfile?.fullName || '',
+      mobileNumber: userProfile?.phoneNumber || '',
       address: '',
       description: '',
       productType: '',
@@ -339,17 +553,17 @@ const CustomProductOrder = () => {
       <div className="container">
         <div className="text-center mx-auto wow fadeInUp" data-wow-delay="0.1s" style={{ maxWidth: "800px" }}>
           <h1 className="display-6 text-uppercase mb-3">
-            {editingOrder ? 'Edit Custom Product Order' : 'Custom Product Order'}
+            {editingOrder ? t('customOrder.editTitle') : t('customOrder.title')}
           </h1>
           <p className="mb-5">
             {editingOrder 
-              ? 'Update your order details below' 
-              : 'Design your perfect metal product with our AI-assisted customization system'}
+              ? t('customOrder.updateDescription')
+              : t('customOrder.description')}
           </p>
           {editingOrder && (
             <div className="alert alert-info">
               <i className="fas fa-info-circle me-2"></i>
-              Editing Order #{editingOrder.orderNumber || editingOrder.id}. Only pending orders can be edited.
+              {t('customOrder.editingOrder', { orderNumber: editingOrder.orderNumber || editingOrder.id })}
             </div>
           )}
         </div>
@@ -372,7 +586,15 @@ const CustomProductOrder = () => {
                     {stepNum}
                   </div>
                   <div className="small mt-1 text-muted">
-                    {['Info', 'Product', 'Size', 'Material', 'Design', 'Review', 'Submit'][stepNum - 1]}
+                    {[
+                      t('customOrder.stepLabels.info'),
+                      t('customOrder.stepLabels.product'),
+                      t('customOrder.stepLabels.size'),
+                      t('customOrder.stepLabels.material'),
+                      t('customOrder.stepLabels.design'),
+                      t('customOrder.stepLabels.review'),
+                      t('customOrder.stepLabels.submit')
+                    ][stepNum - 1]}
                   </div>
                 </div>
               ))}
@@ -387,14 +609,14 @@ const CustomProductOrder = () => {
               <div className="alert alert-info d-flex align-items-center" role="alert">
                 <i className="fas fa-info-circle fa-2x me-3"></i>
                 <div>
-                  <h5 className="alert-heading mb-1">Login Required</h5>
-                  <p className="mb-0">You need to be logged in to place a custom order. Please login to continue.</p>
+                  <h5 className="alert-heading mb-1">{t('customOrder.loginRequired')}</h5>
+                  <p className="mb-0">{t('customOrder.loginRequiredDesc')}</p>
                 </div>
                 <button
                   onClick={() => navigate('/login', { state: { returnTo: '/custom-product-order' } })}
                   className="btn btn-primary ms-auto"
                 >
-                  <i className="fas fa-sign-in-alt me-2"></i>Login
+                  <i className="fas fa-sign-in-alt me-2"></i>{t('customOrder.login')}
                 </button>
               </div>
             </div>
@@ -407,50 +629,74 @@ const CustomProductOrder = () => {
             <div className="col-lg-8">
               <div className="card shadow-sm">
                 <div className="card-header bg-light">
-                  <h3 className="card-title mb-0">Step 1: Customer Information</h3>
+                  <h3 className="card-title mb-0">{t('customOrder.step1')}</h3>
+                  {userProfile && !editingOrder && (
+                    <small className="text-muted d-block mt-2">
+                      <i className="fas fa-info-circle me-1"></i>
+                      {t('customOrder.profileAutoFilled')}
+                    </small>
+                  )}
                 </div>
                 <div className="card-body p-4">
                   <div className="row g-3">
                     <div className="col-12">
-                      <label className="form-label fw-bold">Full Name <span className="text-danger">*</span></label>
+                      <label className="form-label fw-bold">{t('customOrder.fullName')} <span className="text-danger">*</span></label>
                       <input
                         type="text"
                         className="form-control form-control-lg"
                         value={formData.customerName}
                         onChange={(e) => handleInputChange('customerName', e.target.value)}
-                        placeholder="Enter your full name"
+                        placeholder={t('customOrder.enterFullName')}
+                        disabled={!!userProfile && !editingOrder}
+                        readOnly={!!userProfile && !editingOrder}
+                        style={userProfile && !editingOrder ? { backgroundColor: '#f8f9fa', cursor: 'not-allowed' } : {}}
                         required
                       />
+                      {userProfile && !editingOrder && (
+                        <small className="text-success d-block mt-1">
+                          <i className="fas fa-check-circle me-1"></i>
+                          {t('customOrder.autoFilledFromProfile')}
+                        </small>
+                      )}
                     </div>
                     <div className="col-12">
-                      <label className="form-label fw-bold">Mobile Number <span className="text-danger">*</span></label>
+                      <label className="form-label fw-bold">{t('customOrder.mobileNumber')} <span className="text-danger">*</span></label>
                       <input
                         type="tel"
                         className="form-control form-control-lg"
                         value={formData.mobileNumber}
                         onChange={(e) => handleInputChange('mobileNumber', e.target.value)}
-                        placeholder="e.g., +977 9841001234"
+                        placeholder={t('customOrder.enterMobileNumber')}
+                        disabled={!!userProfile && !editingOrder}
+                        readOnly={!!userProfile && !editingOrder}
+                        style={userProfile && !editingOrder ? { backgroundColor: '#f8f9fa', cursor: 'not-allowed' } : {}}
                         required
                       />
+                      {userProfile && !editingOrder && (
+                        <small className="text-success d-block mt-1">
+                          <i className="fas fa-check-circle me-1"></i>
+                          {t('customOrder.autoFilledFromProfile')}
+                        </small>
+                      )}
                     </div>
                     <div className="col-12">
-                      <label className="form-label fw-bold">Address <span className="text-danger">*</span></label>
+                      <label className="form-label fw-bold">{t('customOrder.address')} <span className="text-danger">*</span></label>
                       <textarea
                         className="form-control form-control-lg"
                         value={formData.address}
                         onChange={(e) => handleInputChange('address', e.target.value)}
-                        placeholder="Enter your complete address"
+                        placeholder={t('customOrder.enterAddress')}
                         rows="3"
                         required
                       />
                     </div>
                     <div className="col-12">
-                      <label className="form-label fw-bold">Description</label>
+                      <label className="form-label fw-bold">{t('customOrder.description')}</label>
                       <textarea
                         className="form-control form-control-lg"
                         value={formData.description}
                         onChange={(e) => handleInputChange('description', e.target.value)}
-                        placeholder="Any additional details or special requirements..."
+                        placeholder={t('customOrder.additionalDetails')}
                         rows="4"
                       />
                     </div>
@@ -459,13 +705,13 @@ const CustomProductOrder = () => {
                     {!authToken || !user ? (
                       <div className="alert alert-warning">
                         <i className="fas fa-exclamation-triangle me-2"></i>
-                        <strong>Login Required:</strong> Please login to continue with your custom order.
+                        <strong>{t('customOrder.loginRequired')}:</strong> {t('customOrder.pleaseLoginToContinue')}
                         <div className="mt-3">
                           <button
                             onClick={() => navigate('/login', { state: { returnTo: '/custom-product-order' } })}
                             className="btn btn-primary"
                           >
-                            <i className="fas fa-sign-in-alt me-2"></i>Login Now
+                            <i className="fas fa-sign-in-alt me-2"></i>{t('customOrder.loginNow')}
                           </button>
                         </div>
                       </div>
@@ -475,7 +721,7 @@ const CustomProductOrder = () => {
                         disabled={!formData.customerName || !formData.mobileNumber || !formData.address}
                         className="btn btn-primary btn-lg px-5"
                       >
-                        Continue to Product Selection <i className="fas fa-arrow-right ms-2"></i>
+                        {t('customOrder.continueToProductSelection')} <i className="fas fa-arrow-right ms-2"></i>
                       </button>
                     )}
                   </div>
@@ -494,16 +740,16 @@ const CustomProductOrder = () => {
                   <div className="text-warning mb-4">
                     <i className="fas fa-lock fa-5x"></i>
                   </div>
-                  <h2 className="text-warning mb-3">Authentication Required</h2>
+                  <h2 className="text-warning mb-3">{t('customOrder.authenticationRequired')}</h2>
                   <p className="lead mb-4">
-                    You must be logged in to continue with your custom product order.
+                    {t('customOrder.authenticationRequiredDesc')}
                   </p>
                   <button
                     onClick={() => navigate('/login', { state: { returnTo: '/custom-product-order' } })}
                     className="btn btn-primary btn-lg"
                   >
                     <i className="fas fa-sign-in-alt me-2"></i>
-                    Login to Continue
+                    {t('customOrder.loginToContinue')}
                   </button>
                 </div>
               </div>
@@ -514,7 +760,7 @@ const CustomProductOrder = () => {
             <div className="col-lg-8">
               <div className="card shadow-sm">
                 <div className="card-header bg-light">
-                  <h3 className="card-title mb-0">Step 1: Select Product Type</h3>
+                  <h3 className="card-title mb-0">{t('customOrder.step2')}</h3>
                 </div>
                 <div className="card-body p-4">
                   <div className="row g-3">
@@ -522,15 +768,15 @@ const CustomProductOrder = () => {
                       <div key={type} className="col-md-4 col-sm-6">
                         <button
                           onClick={() => handleInputChange('productType', type)}
-                          className={`btn w-100 h-100 py-4 ${
+                          className={`btn w-100 h-100 py-4 d-flex flex-column align-items-center justify-content-center ${
                             formData.productType === type
                               ? 'btn-primary'
                               : 'btn-outline-primary'
                           }`}
+                          style={{ minHeight: '120px' }}
                         >
-                          <i className="fas fa-cube fa-2x mb-2"></i>
-                          <br />
-                          {type}
+                          <i className={`${productTypeIcons[type] || 'fas fa-cube'} fa-2x mb-3`}></i>
+                          <span className="fw-bold" style={{ fontSize: '1rem' }}>{type}</span>
                         </button>
                       </div>
                     ))}
@@ -541,7 +787,7 @@ const CustomProductOrder = () => {
                         onClick={() => setStep(1)}
                         className="btn btn-secondary btn-lg w-100"
                       >
-                        <i className="fas fa-arrow-left me-2"></i> Back
+                        <i className="fas fa-arrow-left me-2"></i> {t('customOrder.back')}
                       </button>
                     </div>
                     <div className="col-6">
@@ -550,7 +796,7 @@ const CustomProductOrder = () => {
                       disabled={!formData.productType}
                         className="btn btn-primary btn-lg w-100"
                     >
-                      Continue to Measurements <i className="fas fa-arrow-right ms-2"></i>
+                      {t('customOrder.continueToMeasurements')} <i className="fas fa-arrow-right ms-2"></i>
                     </button>
                     </div>
                   </div>
@@ -566,12 +812,12 @@ const CustomProductOrder = () => {
             <div className="col-lg-8">
               <div className="card shadow-sm">
                 <div className="card-header bg-light">
-                  <h3 className="card-title mb-0">Step 2: Enter Measurements</h3>
+                  <h3 className="card-title mb-0">{t('customOrder.step3')}</h3>
                 </div>
                 <div className="card-body p-4">
                   <div className="row g-4">
                     <div className="col-md-4">
-                      <label className="form-label fw-bold">Height (feet)</label>
+                      <label className="form-label fw-bold">{t('customOrder.height')}</label>
                       <input
                         type="number"
                         className="form-control form-control-lg"
@@ -583,7 +829,7 @@ const CustomProductOrder = () => {
                       />
                     </div>
                     <div className="col-md-4">
-                      <label className="form-label fw-bold">Width (feet)</label>
+                      <label className="form-label fw-bold">{t('customOrder.width')}</label>
                       <input
                         type="number"
                         className="form-control form-control-lg"
@@ -595,7 +841,7 @@ const CustomProductOrder = () => {
                       />
                     </div>
                     <div className="col-md-4">
-                      <label className="form-label fw-bold">Thickness (mm)</label>
+                      <label className="form-label fw-bold">{t('customOrder.thickness')}</label>
                       <input
                         type="number"
                         className="form-control form-control-lg"
@@ -613,7 +859,7 @@ const CustomProductOrder = () => {
                         onClick={() => setStep(2)}
                         className="btn btn-secondary btn-lg w-100"
                       >
-                        <i className="fas fa-arrow-left me-2"></i> Back
+                        <i className="fas fa-arrow-left me-2"></i> {t('customOrder.back')}
                       </button>
                     </div>
                     <div className="col-6">
@@ -622,7 +868,7 @@ const CustomProductOrder = () => {
                         disabled={!formData.measurements.height || !formData.measurements.width || !formData.measurements.thickness || !authToken || !user}
                         className="btn btn-primary btn-lg w-100"
                       >
-                        Continue to Material <i className="fas fa-arrow-right ms-2"></i>
+                        {t('customOrder.continueToMaterial')} <i className="fas fa-arrow-right ms-2"></i>
                       </button>
                     </div>
                   </div>
@@ -638,7 +884,7 @@ const CustomProductOrder = () => {
             <div className="col-lg-8">
               <div className="card shadow-sm">
                 <div className="card-header bg-light">
-                  <h3 className="card-title mb-0">Step 3: Select Material Type</h3>
+                  <h3 className="card-title mb-0">{t('customOrder.step4')}</h3>
                 </div>
                 <div className="card-body p-4">
                   <div className="row g-3">
@@ -665,7 +911,7 @@ const CustomProductOrder = () => {
                         onClick={() => setStep(3)}
                         className="btn btn-secondary btn-lg w-100"
                       >
-                        <i className="fas fa-arrow-left me-2"></i> Back
+                        <i className="fas fa-arrow-left me-2"></i> {t('customOrder.back')}
                       </button>
                     </div>
                     <div className="col-6">
@@ -674,7 +920,7 @@ const CustomProductOrder = () => {
                         disabled={!formData.materialType || !authToken || !user}
                         className="btn btn-primary btn-lg w-100"
                       >
-                        Continue to Design <i className="fas fa-arrow-right ms-2"></i>
+                        {t('customOrder.continueToDesign')} <i className="fas fa-arrow-right ms-2"></i>
                       </button>
                     </div>
                   </div>
@@ -690,31 +936,97 @@ const CustomProductOrder = () => {
             <div className="col-lg-10">
               <div className="card shadow-sm">
                 <div className="card-header bg-light">
-                  <h3 className="card-title mb-0">Step 4: Choose Design Option</h3>
+                  <h3 className="card-title mb-0">{t('customOrder.step5')}</h3>
                 </div>
                 <div className="card-body p-4">
                   
                   {/* Design Templates */}
                   <div className="mb-5">
-                    <h5 className="mb-3">Select Design Template</h5>
-                    <div className="row g-3">
+                    <h5 className="mb-3">{t('customOrder.selectDesignTemplate')}</h5>
+                    <div className="row g-4">
                       {designTemplates.map(template => (
                         <div key={template} className="col-md-4 col-sm-6">
-                          <button
+                          <div
                             onClick={() => {
                               handleInputChange('designType', 'template');
                               handleInputChange('designTemplate', template);
+                              // Store the design template image URL
+                              const templateImageUrl = getDesignTemplateImage(formData.productType || 'Window', template);
+                              handleInputChange('referenceImageUrl', templateImageUrl);
+                              handleInputChange('referenceImage', null); // Clear uploaded image if template is selected
                             }}
-                            className={`btn w-100 h-100 py-3 ${
+                            className={`card h-100 cursor-pointer border-2 transition-all ${
                               formData.designTemplate === template && formData.designType === 'template'
-                                ? 'btn-primary'
-                                : 'btn-outline-primary'
+                                ? 'border-primary shadow-lg'
+                                : 'border-light shadow-sm'
                             }`}
+                            style={{ 
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              overflow: 'hidden'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (formData.designTemplate !== template || formData.designType !== 'template') {
+                                e.currentTarget.style.transform = 'translateY(-5px)';
+                                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.15)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              if (formData.designTemplate !== template || formData.designType !== 'template') {
+                                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                              }
+                            }}
                           >
-                            <i className="fas fa-palette fa-2x mb-2"></i>
-                            <br />
-                            {template}
-                          </button>
+                            <div 
+                              className="position-relative"
+                              style={{ 
+                                height: '200px',
+                                overflow: 'hidden',
+                                backgroundColor: '#f8f9fa'
+                              }}
+                            >
+                              <img
+                                src={getDesignTemplateImage(formData.productType || 'Window', template)}
+                                alt={`${formData.productType || 'Product'} - ${template} Design`}
+                                className="w-100 h-100"
+                                style={{ 
+                                  objectFit: 'cover',
+                                  transition: 'transform 0.3s ease'
+                                }}
+                                onError={(e) => {
+                                  // Fallback to a placeholder if image fails to load
+                                  e.target.src = `https://via.placeholder.com/400x300/007bff/ffffff?text=${encodeURIComponent((formData.productType || 'Product') + ' - ' + template)}`;
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.transform = 'scale(1.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.transform = 'scale(1)';
+                                }}
+                              />
+                              {formData.designTemplate === template && formData.designType === 'template' && (
+                                <div 
+                                  className="position-absolute top-0 end-0 m-2"
+                                  style={{
+                                    backgroundColor: 'rgba(0, 123, 255, 0.9)',
+                                    borderRadius: '50%',
+                                    width: '40px',
+                                    height: '40px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'white'
+                                  }}
+                                >
+                                  <i className="fas fa-check"></i>
+                                </div>
+                              )}
+                            </div>
+                            <div className="card-body text-center p-3">
+                              <h6 className="card-title mb-0 fw-bold">{template}</h6>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -722,7 +1034,7 @@ const CustomProductOrder = () => {
 
                   {/* Reference Image Upload */}
                   <div className="mb-4">
-                    <h5 className="mb-3">Or Upload Reference Image</h5>
+                    <h5 className="mb-3">{t('customOrder.uploadReferenceImage')}</h5>
                     <div className="border border-dashed border-primary rounded p-5 text-center bg-light">
                       <input
                         type="file"
@@ -730,6 +1042,11 @@ const CustomProductOrder = () => {
                         onChange={(e) => {
                           handleInputChange('designType', 'upload');
                           handleInputChange('referenceImage', e.target.files[0]);
+                          // Create preview URL for uploaded image
+                          if (e.target.files[0]) {
+                            handleInputChange('referenceImageUrl', URL.createObjectURL(e.target.files[0]));
+                          }
+                          handleInputChange('designTemplate', ''); // Clear template if image is uploaded
                         }}
                         className="d-none"
                         id="referenceImage"
@@ -737,8 +1054,8 @@ const CustomProductOrder = () => {
                       <label htmlFor="referenceImage" className="cursor-pointer m-0">
                         <div className="text-muted">
                           <i className="fas fa-cloud-upload-alt fa-3x mb-3"></i>
-                          <h5>Click to upload reference image</h5>
-                          <p className="mb-2">Upload a photo of your desired design</p>
+                          <h5>{t('customOrder.uploadReferenceImage')}</h5>
+                          <p className="mb-2">{t('customOrder.uploadReferenceImage')}</p>
                           {formData.referenceImage && (
                             <p className="text-success">
                               <i className="fas fa-check me-2"></i>
@@ -756,14 +1073,14 @@ const CustomProductOrder = () => {
                         onClick={() => setStep(4)}
                         className="btn btn-secondary btn-lg w-100"
                       >
-                        <i className="fas fa-arrow-left me-2"></i> Back
+                        <i className="fas fa-arrow-left me-2"></i> {t('customOrder.back')}
                       </button>
                     </div>
                     <div className="col-6">
                       <button
                         onClick={() => {
                           if (!authToken || !user) {
-                            ErrorMessageToast('Please login to continue');
+                            ErrorMessageToast(t('customOrder.pleaseLoginToContinue'));
                             navigate('/login', { state: { returnTo: '/custom-product-order' } });
                             return;
                           }
@@ -772,8 +1089,8 @@ const CustomProductOrder = () => {
                         disabled={(!formData.designTemplate && !formData.referenceImage) || !authToken || !user}
                         className="btn btn-success btn-lg w-100"
                       >
-                        <i className="fas fa-robot me-2"></i>
-                        Generate AI Design & Cost
+                        <i className="fas fa-calculator me-2"></i>
+                        {t('Generate Estimate') || 'Generate Estimate'}
                       </button>
                     </div>
                   </div>
@@ -783,13 +1100,13 @@ const CustomProductOrder = () => {
           </div>
         )}
 
-        {/* Step 6: AI Design Preview & Cost Review */}
+        {/* Step 6: Design Preview & Cost Review */}
         {step === 6 && formData.aiDesign && (
           <div className="row justify-content-center wow fadeInUp" data-wow-delay="0.1s">
             <div className="col-lg-10">
               <div className="card shadow-sm">
                 <div className="card-header bg-light">
-                  <h3 className="card-title mb-0">Step 5: AI Design Preview & Cost Estimate</h3>
+                  <h3 className="card-title mb-0">{t('customOrder.step6') || 'Step 6: Review Order & Estimate'}</h3>
                 </div>
                 <div className="card-body p-4">
                   <div className="row g-4">
@@ -800,15 +1117,38 @@ const CustomProductOrder = () => {
                         <div className="card-header bg-primary text-white">
                           <h4 className="card-title mb-0">
                             <i className="fas fa-eye me-2"></i>
-                            Design Preview
+                            {t('customOrder.reviewCostEstimate')}
                           </h4>
                         </div>
                         <div className="card-body text-center">
+                          {/* Display Design Template Image or Reference Image */}
+                          {(formData.referenceImageUrl || formData.referenceImage) && (
+                            <div className="mb-3">
+                              <img
+                                src={formData.referenceImage ? URL.createObjectURL(formData.referenceImage) : formData.referenceImageUrl}
+                                alt={formData.designType === 'template' ? `${formData.productType} - ${formData.designTemplate} Design` : 'Reference Image'}
+                                className="img-fluid rounded shadow-sm"
+                                style={{ maxHeight: '300px', width: '100%', objectFit: 'contain' }}
+                              />
+                              {formData.designType === 'template' && formData.designTemplate && (
+                                <p className="mt-2 mb-0">
+                                  <strong>Design Template:</strong> {formData.designTemplate}
+                                </p>
+                              )}
+                              {formData.designType === 'upload' && formData.referenceImage && (
+                                <p className="mt-2 mb-0">
+                                  <strong>Reference Image:</strong> {formData.referenceImage.name}
+                                </p>
+                              )}
+                            </div>
+                          )}
                           <div className="bg-light rounded p-4 mb-3">
                             <i className="fas fa-cube fa-4x text-primary mb-3"></i>
                             <h5 className="text-primary">{formData.productType}</h5>
                             <p className="mb-1">{formData.materialType}</p>
-                            <p className="mb-1">{formData.designTemplate} Design</p>
+                            {formData.designTemplate && (
+                              <p className="mb-1">{formData.designTemplate} Design</p>
+                            )}
                           </div>
                           <div className="text-start">
                             <h6 className="text-uppercase">Design Specifications:</h6>
@@ -829,7 +1169,7 @@ const CustomProductOrder = () => {
                         <div className="card-header bg-success text-white">
                           <h4 className="card-title mb-0">
                             <i className="fas fa-calculator me-2"></i>
-                            Cost Estimation
+                            {t('customOrder.reviewCostEstimate')}
                           </h4>
                         </div>
                         <div className="card-body">
@@ -870,7 +1210,7 @@ const CustomProductOrder = () => {
                         onClick={() => setStep(5)}
                         className="btn btn-secondary btn-lg w-100"
                       >
-                        <i className="fas fa-arrow-left me-2"></i> Back to Design
+                        <i className="fas fa-arrow-left me-2"></i> {t('customOrder.back')}
                       </button>
                     </div>
                     <div className="col-6">
@@ -887,7 +1227,7 @@ const CustomProductOrder = () => {
                         ) : (
                           <>
                             <i className={`fas ${editingOrder ? 'fa-save' : 'fa-paper-plane'} me-2`}></i>
-                            {editingOrder ? 'Update Order' : 'Submit Custom Order'}
+                            {editingOrder ? t('customOrder.updateOrder') : t('customOrder.submitOrder')}
                           </>
                         )}
                       </button>
@@ -898,7 +1238,7 @@ const CustomProductOrder = () => {
                             className="btn btn-secondary btn-lg w-100"
                           >
                             <i className="fas fa-times me-2"></i>
-                            Cancel Edit
+                            {t('customOrder.cancelEdit')}
                       </button>
                         </div>
                       )}
@@ -919,14 +1259,14 @@ const CustomProductOrder = () => {
                   <div className="text-success mb-4">
                     <i className="fas fa-check-circle fa-5x"></i>
                   </div>
-                  <h2 className="text-success mb-3">Order Placed Successfully!</h2>
+                  <h2 className="text-success mb-3">{t('customOrder.orderSubmittedSuccessfully')}</h2>
                   <p className="lead mb-4">
-                    Your custom <strong>{currentOrder.productType}</strong> order has been submitted to our service providers.
+                    {t('customOrder.orderSubmittedSuccessfully')} <strong>{currentOrder.productType}</strong>
                   </p>
                   
                   <div className="card bg-light mb-4">
                     <div className="card-body">
-                      <h5 className="card-title">Order Details</h5>
+                      <h5 className="card-title">{t('customOrder.orderHistory')}</h5>
                       <div className="row text-start">
                         <div className="col-6">
                           <p className="mb-1"><strong>Order No:</strong> {currentOrder.orderNumber || currentOrder.id}</p>
@@ -957,18 +1297,17 @@ const CustomProductOrder = () => {
                   </div>
 
                   <p className="text-muted mb-4">
-                    Our service providers will review your order and contact you shortly. 
-                    You can track your order status in your account dashboard.
+                    {t('customOrder.orderSubmittedSuccessfully')}
                   </p>
 
                   <div className="d-grid gap-2 d-md-flex justify-content-center">
                     <button onClick={startNewOrder} className="btn btn-primary btn-lg">
                       <i className="fas fa-plus me-2"></i>
-                      Create Another Order
+                      {t('customOrder.submitOrder')}
                     </button>
                     <button className="btn btn-outline-primary btn-lg">
                       <i className="fas fa-tasks me-2"></i>
-                      Track Order
+                      {t('customOrder.viewDetails')}
                     </button>
                   </div>
                 </div>
@@ -978,93 +1317,106 @@ const CustomProductOrder = () => {
         )}
 
         {/* Orders List Section */}
-        {orders.length > 0 && (
+        {user && user.id && (
           <div className="row justify-content-center mt-5 wow fadeInUp" data-wow-delay="0.2s">
             <div className="col-lg-12">
               <div className="card shadow-sm">
                 <div className="card-header bg-light d-flex justify-content-between align-items-center">
                   <h3 className="card-title mb-0">
                     <i className="fas fa-list me-2"></i>
-                    Your Custom Orders
+                    {t('customOrder.orderHistory')}
                   </h3>
                   <button className="btn btn-sm btn-outline-primary" onClick={fetchOrders}>
-                    <i className="fas fa-sync me-1"></i>Refresh
+                    <i className="fas fa-sync me-1"></i>{t('customOrder.refresh')}
                   </button>
-      </div>
+                </div>
+                {orders.length === 0 ? (
+                  <div className="card-body text-center py-5">
+                    <i className="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                    <h5 className="text-muted mb-2">{t('customOrder.noOrders')}</h5>
+                    <p className="text-muted mb-4">{t('customOrder.noOrders')}</p>
+                  </div>
+                ) : (
                 <div className="card-body">
                   <div className="table-responsive">
                     <table className="table table-hover align-middle">
                       <thead className="table-light">
                         <tr>
-                          <th>Order No</th>
-                          <th>Customer</th>
-                          <th>Product</th>
-                          <th>Material</th>
-                          <th>Cost</th>
-                          <th>Status</th>
-                          <th>Payment</th>
-                          <th>Date</th>
-                          <th className="text-end">Actions</th>
+                          <th>{t('customOrder.orderNo')}</th>
+                          <th>{t('customOrder.customer')}</th>
+                          <th>{t('customOrder.product')}</th>
+                          <th>{t('customOrder.material')}</th>
+                          <th>{t('customOrder.cost')}</th>
+                          <th>{t('customOrder.status')}</th>
+                          <th>{t('customOrder.payment')}</th>
+                          <th>{t('customOrder.date')}</th>
+                          <th className="text-end">{t('customOrder.actions')}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {orders.map((order) => {
-                          const measurements = order.measurementsJson ? JSON.parse(order.measurementsJson) : {};
-                          const canEdit = order.status === 'PENDING';
+                        {(() => {
+                          // Calculate pagination
+                          const indexOfLastOrder = currentPage * itemsPerPage;
+                          const indexOfFirstOrder = indexOfLastOrder - itemsPerPage;
+                          const currentOrders = orders.slice(indexOfFirstOrder, indexOfLastOrder);
                           
-                          // Get status display based on order status and progress
-                          const getStatusDisplay = (status, progressPercentage) => {
-                            if (status === 'PENDING') {
-                              return { text: 'Pending Approval', class: 'bg-warning text-dark', icon: 'fas fa-clock' };
-                            } else if (status === 'APPROVED') {
-                              return { text: 'Approved - Ready to Start', class: 'bg-info text-white', icon: 'fas fa-check-circle' };
-                            } else if (status === 'IN_PROGRESS') {
-                              return { text: `In Progress (${progressPercentage || 0}%)`, class: 'bg-primary text-white', icon: 'fas fa-hammer' };
-                            } else if (status === 'READY_FOR_DELIVERY') {
-                              return { text: 'Ready for Delivery', class: 'bg-success text-white', icon: 'fas fa-truck' };
-                            } else if (status === 'COMPLETED') {
-                              return { text: 'Completed', class: 'bg-success text-white', icon: 'fas fa-check-double' };
-                            } else if (status === 'REJECTED') {
-                              return { text: 'Rejected', class: 'bg-danger text-white', icon: 'fas fa-times-circle' };
-                            } else if (status === 'CANCELLED') {
-                              return { text: 'Cancelled', class: 'bg-secondary text-white', icon: 'fas fa-ban' };
-                            }
-                            return { text: status || 'Pending', class: 'bg-warning text-dark', icon: 'fas fa-question' };
-                          };
-                          
-                          const statusDisplay = getStatusDisplay(order.status, order.progressPercentage);
-                          
-                          // Get payment status display
-                          const getPaymentStatusDisplay = (paymentStatus, paymentMethod) => {
-                            if (!paymentStatus && !paymentMethod) {
-                              return { text: 'Not Set', class: 'bg-light text-dark', icon: 'fas fa-question' };
-                            }
+                          return currentOrders.map((order) => {
+                            const measurements = order.measurementsJson ? JSON.parse(order.measurementsJson) : {};
+                            const canEdit = order.status === 'PENDING';
                             
-                            if (paymentStatus === 'PAID') {
-                              return { text: 'Paid', class: 'bg-success text-white', icon: 'fas fa-check-circle' };
-                            } else if (paymentStatus === 'PENDING') {
-                              return { text: 'Pending', class: 'bg-warning text-dark', icon: 'fas fa-clock' };
-                            } else if (paymentStatus === 'PARTIAL') {
-                              return { text: 'Partial', class: 'bg-info text-white', icon: 'fas fa-hourglass-half' };
-                            } else if (paymentStatus === 'REFUNDED') {
-                              return { text: 'Refunded', class: 'bg-secondary text-white', icon: 'fas fa-undo' };
-                            }
-                            
-                            // If payment method is set but status is not, show based on method
-                            if (paymentMethod) {
-                              if (paymentMethod === 'COD' || paymentMethod === 'cod') {
-                                return { text: 'Pending', class: 'bg-warning text-dark', icon: 'fas fa-clock' };
-                              } else {
-                                return { text: 'Pending', class: 'bg-warning text-dark', icon: 'fas fa-clock' };
+                            // Get status display based on order status and progress
+                            const getStatusDisplay = (status, progressPercentage) => {
+                              if (status === 'PENDING') {
+                                return { text: 'Pending Approval', class: 'bg-warning text-dark', icon: 'fas fa-clock' };
+                              } else if (status === 'APPROVED') {
+                                return { text: 'Approved - Ready to Start', class: 'bg-info text-white', icon: 'fas fa-check-circle' };
+                              } else if (status === 'IN_PROGRESS') {
+                                return { text: `In Progress (${progressPercentage || 0}%)`, class: 'bg-primary text-white', icon: 'fas fa-hammer' };
+                              } else if (status === 'READY_FOR_DELIVERY') {
+                                return { text: 'Ready for Delivery', class: 'bg-success text-white', icon: 'fas fa-truck' };
+                              } else if (status === 'COMPLETED') {
+                                return { text: 'Completed', class: 'bg-success text-white', icon: 'fas fa-check-double' };
+                              } else if (status === 'REJECTED') {
+                                return { text: 'Rejected', class: 'bg-danger text-white', icon: 'fas fa-times-circle' };
+                              } else if (status === 'CANCELLED') {
+                                return { text: 'Cancelled', class: 'bg-secondary text-white', icon: 'fas fa-ban' };
                               }
-                            }
+                              return { text: status || 'Pending', class: 'bg-warning text-dark', icon: 'fas fa-question' };
+                            };
                             
-                            return { text: 'Pending', class: 'bg-warning text-dark', icon: 'fas fa-clock' };
-                          };
-                          
-                          const paymentStatusDisplay = getPaymentStatusDisplay(order.paymentStatus, order.paymentMethod);
-                          
-                          return (
+                            const statusDisplay = getStatusDisplay(order.status, order.progressPercentage);
+                            
+                            // Get payment status display
+                            const getPaymentStatusDisplay = (paymentStatus, paymentMethod) => {
+                              if (!paymentStatus && !paymentMethod) {
+                                return { text: 'Not Set', class: 'bg-light text-dark', icon: 'fas fa-question' };
+                              }
+                              
+                              if (paymentStatus === 'PAID') {
+                                return { text: 'Paid', class: 'bg-success text-white', icon: 'fas fa-check-circle' };
+                              } else if (paymentStatus === 'PENDING') {
+                                return { text: 'Pending', class: 'bg-warning text-dark', icon: 'fas fa-clock' };
+                              } else if (paymentStatus === 'PARTIAL') {
+                                return { text: 'Partial', class: 'bg-info text-white', icon: 'fas fa-hourglass-half' };
+                              } else if (paymentStatus === 'REFUNDED') {
+                                return { text: 'Refunded', class: 'bg-secondary text-white', icon: 'fas fa-undo' };
+                              }
+                              
+                              // If payment method is set but status is not, show based on method
+                              if (paymentMethod) {
+                                if (paymentMethod === 'COD' || paymentMethod === 'cod') {
+                                  return { text: 'Pending', class: 'bg-warning text-dark', icon: 'fas fa-clock' };
+                                } else {
+                                  return { text: 'Pending', class: 'bg-warning text-dark', icon: 'fas fa-clock' };
+                                }
+                              }
+                              
+                              return { text: 'Pending', class: 'bg-warning text-dark', icon: 'fas fa-clock' };
+                            };
+                            
+                            const paymentStatusDisplay = getPaymentStatusDisplay(order.paymentStatus, order.paymentMethod);
+                            
+                            return (
                             <tr key={order.id}>
                               <td>
                                 <span className="badge bg-light text-dark">
@@ -1125,9 +1477,9 @@ const CustomProductOrder = () => {
                                     <button
                                       className="btn btn-sm btn-success"
                                       onClick={() => navigate(`/custom-order-confirmation/${order.id}`)}
-                                      title="Confirm Completion"
+                                      title={t('customOrder.confirm')}
                                     >
-                                      <i className="fas fa-check me-1"></i>Confirm
+                                      <i className="fas fa-check me-1"></i>{t('customOrder.confirm')}
                                     </button>
                                   )}
                                   {/* Edit Button - Only for PENDING orders (leftmost) */}
@@ -1135,7 +1487,7 @@ const CustomProductOrder = () => {
                                     <button
                                       className="btn btn-sm btn-outline-primary"
                                       onClick={() => handleEdit(order)}
-                                      title="Edit Order"
+                                      title={t('customOrder.edit')}
                                     >
                                       <i className="fas fa-edit"></i>
                                     </button>
@@ -1146,7 +1498,7 @@ const CustomProductOrder = () => {
                                     <button
                                       className="btn btn-sm btn-outline-warning"
                                       onClick={() => setShowCancelConfirm(order.id)}
-                                      title="Cancel Order"
+                                      title={t('customOrder.cancel')}
                                     >
                                       <i className="fas fa-ban"></i>
                                     </button>
@@ -1156,17 +1508,17 @@ const CustomProductOrder = () => {
                                   <button
                                     className="btn btn-sm btn-outline-info"
                                     onClick={() => navigate(`/custom-order-confirmation/${order.id}`)}
-                                    title="View Details"
+                                    title={t('customOrder.viewDetails')}
                                   >
                                     <i className="fas fa-eye"></i>
                                   </button>
                                   
-                                  {/* Delete Button - Only for PENDING orders (to the right of View) */}
-                                  {canEdit && (
+                                  {/* Delete Button - Available for PENDING, CANCELLED, and REJECTED orders */}
+                                  {(order.status === 'PENDING' || order.status === 'CANCELLED' || order.status === 'REJECTED') && (
                                     <button
                                       className="btn btn-sm btn-outline-danger"
-                                      onClick={() => setShowDeleteConfirm(order.id)}
-                                      title="Delete Order"
+                                      onClick={() => setShowDeleteConfirm(order)}
+                                      title={t('customOrder.delete')}
                                     >
                                       <i className="fas fa-trash"></i>
                                     </button>
@@ -1177,9 +1529,9 @@ const CustomProductOrder = () => {
                                     <button
                                       className="btn btn-sm btn-warning"
                                       onClick={() => navigate(`/custom-order-review/${order.id}`)}
-                                      title="Add Review"
+                                      title={t('customOrder.viewDetails')}
                                     >
-                                      <i className="fas fa-star me-1"></i>Review
+                                      <i className="fas fa-star me-1"></i>{t('customOrder.viewDetails')}
                                     </button>
                                   )}
                                   
@@ -1188,20 +1540,84 @@ const CustomProductOrder = () => {
                                     <button
                                       className="btn btn-sm btn-primary"
                                       onClick={() => handleReOrder(order)}
-                                      title="Re-order"
+                                      title={t('customOrder.reOrder')}
                                     >
-                                      <i className="fas fa-redo me-1"></i>Re-order
+                                      <i className="fas fa-redo me-1"></i>{t('customOrder.reOrder')}
                                     </button>
                                   )}
                                 </div>
                               </td>
                             </tr>
-                          );
-                        })}
+                            );
+                          });
+                        })()}
                       </tbody>
                     </table>
                   </div>
+                  
+                  {/* Pagination */}
+                  {(() => {
+                    const totalPages = Math.ceil(orders.length / itemsPerPage);
+                    if (totalPages <= 1) return null;
+                    
+                    const getPageNumbers = () => {
+                      const pages = [];
+                      const maxVisible = 5;
+                      let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+                      let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+                      
+                      if (endPage - startPage < maxVisible - 1) {
+                        startPage = Math.max(1, endPage - maxVisible + 1);
+                      }
+                      
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(i);
+                      }
+                      return pages;
+                    };
+                    
+                    return (
+                      <div className="d-flex justify-content-between align-items-center mt-4">
+                        <div className="text-muted">
+                          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, orders.length)} of {orders.length} orders
+                        </div>
+                        <nav>
+                          <ul className="pagination mb-0">
+                            <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                              <button
+                                className="page-link"
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                              >
+                                <i className="fas fa-chevron-left"></i> Previous
+                              </button>
+                            </li>
+                            {getPageNumbers().map((pageNum) => (
+                              <li key={pageNum} className={`page-item ${currentPage === pageNum ? 'active' : ''}`}>
+                                <button
+                                  className="page-link"
+                                  onClick={() => setCurrentPage(pageNum)}
+                                >
+                                  {pageNum}
+                                </button>
+                              </li>
+                            ))}
+                            <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                              <button
+                                className="page-link"
+                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                disabled={currentPage === totalPages}
+                              >
+                                Next <i className="fas fa-chevron-right"></i>
+                              </button>
+                            </li>
+                          </ul>
+                        </nav>
+                      </div>
+                    );
+                  })()}
                 </div>
+                )}
               </div>
             </div>
           </div>
@@ -1210,12 +1626,12 @@ const CustomProductOrder = () => {
         {/* Delete Confirmation Modal */}
         {showDeleteConfirm && (
           <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
-            <div className="modal-dialog">
+            <div className="modal-dialog modal-dialog-centered">
               <div className="modal-content">
                 <div className="modal-header bg-danger text-white">
                   <h5 className="modal-title">
                     <i className="fas fa-exclamation-triangle me-2"></i>
-                    Confirm Delete
+                    Confirm Delete Order
                   </h5>
                   <button
                     type="button"
@@ -1224,23 +1640,89 @@ const CustomProductOrder = () => {
                   ></button>
                 </div>
                 <div className="modal-body">
-                  <p>Are you sure you want to delete this order? This action cannot be undone.</p>
-                  <p className="text-muted small">
-                    <strong>Note:</strong> Only pending orders can be deleted.
-                  </p>
+                  <div className="alert alert-warning">
+                    <i className="fas fa-exclamation-circle me-2"></i>
+                    <strong>Warning:</strong> This action cannot be undone!
+                  </div>
+                  
+                  <p className="mb-3">Are you sure you want to delete the following order?</p>
+                  
+                  <div className="card border mb-3">
+                    <div className="card-body">
+                      <div className="row">
+                        <div className="col-6">
+                          <strong>Order Number:</strong>
+                        </div>
+                        <div className="col-6">
+                          #{showDeleteConfirm.orderNumber || showDeleteConfirm.id}
+                        </div>
+                      </div>
+                      <hr className="my-2" />
+                      <div className="row">
+                        <div className="col-6">
+                          <strong>Product Type:</strong>
+                        </div>
+                        <div className="col-6">
+                          {showDeleteConfirm.productType || 'N/A'}
+                        </div>
+                      </div>
+                      <hr className="my-2" />
+                      <div className="row">
+                        <div className="col-6">
+                          <strong>Status:</strong>
+                        </div>
+                        <div className="col-6">
+                          <span className={`badge ${
+                            showDeleteConfirm.status === 'PENDING' ? 'bg-warning text-dark' :
+                            showDeleteConfirm.status === 'CANCELLED' ? 'bg-secondary' :
+                            showDeleteConfirm.status === 'REJECTED' ? 'bg-danger' : 'bg-light'
+                          }`}>
+                            {showDeleteConfirm.status || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                      <hr className="my-2" />
+                      <div className="row">
+                        <div className="col-6">
+                          <strong>Total Amount:</strong>
+                        </div>
+                        <div className="col-6">
+                          <strong className="text-success">
+                            Rs. {(showDeleteConfirm.totalAmount || showDeleteConfirm.estimatedCost || 0).toLocaleString()}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {(showDeleteConfirm.status === 'PENDING' || showDeleteConfirm.status === 'CANCELLED' || showDeleteConfirm.status === 'REJECTED') && (
+                    <p className="text-muted small mb-0">
+                      <i className="fas fa-info-circle me-1"></i>
+                      This will permanently remove the order from your order list.
+                    </p>
+                  )}
+                  
+                  {showDeleteConfirm.status !== 'PENDING' && showDeleteConfirm.status !== 'CANCELLED' && showDeleteConfirm.status !== 'REJECTED' && (
+                    <div className="alert alert-info">
+                      <i className="fas fa-info-circle me-2"></i>
+                      <strong>Note:</strong> Only pending, cancelled, or rejected orders can be deleted. This order cannot be deleted at this time.
+                    </div>
+                  )}
                 </div>
                 <div className="modal-footer">
                   <button
                     className="btn btn-secondary"
                     onClick={() => setShowDeleteConfirm(null)}
                   >
-                    Cancel
+                    <i className="fas fa-times me-1"></i>Cancel
                   </button>
                   <button
                     className="btn btn-danger"
                     onClick={() => handleDelete(showDeleteConfirm)}
+                    disabled={showDeleteConfirm.status !== 'PENDING' && showDeleteConfirm.status !== 'CANCELLED' && showDeleteConfirm.status !== 'REJECTED'}
                   >
-                    <i className="fas fa-trash me-1"></i>Delete
+                    <i className="fas fa-trash me-1"></i>
+                    {(showDeleteConfirm.status === 'PENDING' || showDeleteConfirm.status === 'CANCELLED' || showDeleteConfirm.status === 'REJECTED') ? 'Delete Order' : 'Cannot Delete'}
                   </button>
                 </div>
               </div>

@@ -480,19 +480,41 @@ const CustomOrdersPage = () => {
                   </div>
                 )}
 
-                {selectedOrder.referenceImageUrl && (
+                {(selectedOrder.referenceImageUrl || (selectedOrder.designType === 'template' && selectedOrder.designTemplate)) && (
                   <div className="mb-3">
                     <div className="card">
                       <div className="card-header bg-light">
-                        <h6 className="mb-0"><i className="fas fa-image me-2"></i>Reference Image</h6>
+                        <h6 className="mb-0">
+                          <i className="fas fa-image me-2"></i>
+                          {selectedOrder.designType === 'template' ? 'Design Template' : 'Reference Image'}
+                        </h6>
                       </div>
                       <div className="card-body text-center">
-                        <img
-                          src={selectedOrder.referenceImageUrl}
-                          alt="Reference"
-                          className="img-fluid rounded shadow-sm"
-                          style={{ maxHeight: '300px' }}
-                        />
+                        {selectedOrder.referenceImageUrl ? (
+                          <img
+                            src={selectedOrder.referenceImageUrl}
+                            alt={selectedOrder.designType === 'template' ? `${selectedOrder.productType} - ${selectedOrder.designTemplate} Design` : 'Reference Image'}
+                            className="img-fluid rounded shadow-sm"
+                            style={{ maxHeight: '300px', width: '100%', objectFit: 'contain' }}
+                            onError={(e) => {
+                              // Fallback for design template images
+                              if (selectedOrder.designType === 'template' && selectedOrder.productType && selectedOrder.designTemplate) {
+                                const fallbackUrl = `https://via.placeholder.com/400x300/007bff/ffffff?text=${encodeURIComponent(selectedOrder.productType + ' - ' + selectedOrder.designTemplate)}`;
+                                e.target.src = fallbackUrl;
+                              }
+                            }}
+                          />
+                        ) : selectedOrder.designType === 'template' && selectedOrder.designTemplate ? (
+                          <div className="alert alert-info">
+                            <i className="fas fa-info-circle me-2"></i>
+                            Design Template: <strong>{selectedOrder.designTemplate}</strong>
+                          </div>
+                        ) : null}
+                        {selectedOrder.designType === 'template' && selectedOrder.designTemplate && (
+                          <p className="mt-2 mb-0">
+                            <strong>Template:</strong> {selectedOrder.designTemplate}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -556,7 +578,7 @@ const CustomOrdersPage = () => {
       {/* Assign Welders Modal */}
       {showAssignModal && (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
-          <div className="modal-dialog modal-lg">
+          <div className="modal-dialog modal-lg modal-dialog-scrollable">
             <div className="modal-content">
               <div className="modal-header bg-primary text-white">
                 <h5 className="modal-title">
@@ -572,7 +594,7 @@ const CustomOrdersPage = () => {
                   }}
                 ></button>
               </div>
-              <div className="modal-body">
+              <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
                 <div className="alert alert-info">
                   <i className="fas fa-info-circle me-2"></i>
                   <strong>Note:</strong> Please assign at least one welder before approving the order. The order will be automatically approved after assignment.

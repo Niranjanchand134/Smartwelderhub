@@ -90,3 +90,36 @@ export const markAllAsReadForAdmin = async () => {
   }
 };
 
+
+
+export const deleteNotification = async (notificationId) => {
+  try {
+    const response = await axios.delete(`${API_BASE}/${notificationId}`, getAuthHeaders());
+    return response.data;
+  } catch (error) {
+    console.error("Failed to delete notification:", error);
+    throw error;
+  }
+};
+
+export const deleteAllUserNotifications = async () => {
+  try {
+    const response = await axios.delete(`${API_BASE}/user/delete-all`, getAuthHeaders());
+    return response.data;
+  } catch (error) {
+    console.error("Failed to delete all notifications:", error);
+    throw error;
+  }
+};
+
+export const deleteAllAdminNotifications = async () => {
+  try {
+    const response = await axios.delete(`${API_BASE}/admin/delete-all`, getAuthHeaders());
+    return response.data;
+  } catch (error) {
+    console.error("Failed to delete all notifications:", error);
+    throw error;
+  }
+};
+
+

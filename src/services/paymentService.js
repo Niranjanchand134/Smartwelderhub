@@ -37,3 +37,25 @@ export const verifyEsewaPayment = async (paymentData) => {
   }
 };
 
+
+
+export const checkEsewaStatus = async (statusData) => {
+  try {
+    const { productCode, transactionUuid, totalAmount } = statusData;
+    const response = await axios.get(
+      `${API_BASE}/payment/esewa/status`,
+      {
+        params: {
+          product_code: productCode,
+          transaction_uuid: transactionUuid,
+          total_amount: totalAmount,
+        },
+        ...getAuthHeaders(),
+      }
+    );
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+

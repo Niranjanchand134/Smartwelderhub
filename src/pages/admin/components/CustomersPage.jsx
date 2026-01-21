@@ -1,6 +1,6 @@
 // src/components/AdminPanel/CustomersPage.js
 import React, { useState, useEffect } from 'react';
-import { getAllUsers, deleteUser, updateUser } from '../../../services/authService';
+import { getAllUsers, deleteUser, updateUser, getUserDetailsById } from '../../../services/authService';
 import { ErrorMessageToast, SuccesfulMessageToast } from '../../../utils/Tostify.util';
 
 const CustomersPage = () => {
@@ -14,8 +14,10 @@ const CustomersPage = () => {
     fullName: '',
     email: '',
     phoneNumber: '',
-    role: ''
+    role: '',
+    profileImage: null
   });
+  const [detailedUserData, setDetailedUserData] = useState(null);
 
   useEffect(() => {
     fetchUsers();
@@ -89,18 +91,42 @@ const CustomersPage = () => {
   const filteredWelders = filterUsersByRole(welders);
   const filteredUsers = filterUsersByRole(regularUsers);
 
-  const openViewModal = (user) => {
+  const openViewModal = async (user) => {
     setViewUser(user);
+    try {
+      // Fetch detailed user data including profile image
+      const detailedData = await getUserDetailsById(user.id);
+      setDetailedUserData(detailedData);
+    } catch (error) {
+      console.error('Failed to fetch detailed user data:', error);
+      setDetailedUserData(user);
+    }
   };
 
-  const openEditModal = (user) => {
+  const openEditModal = async (user) => {
     setEditUser(user);
-    setEditForm({
-      fullName: user.fullName || '',
-      email: user.email || '',
-      phoneNumber: user.phoneNumber || '',
-      role: user.role || ''
-    });
+    try {
+      // Fetch detailed user data including profile image
+      const detailedData = await getUserDetailsById(user.id);
+      setDetailedUserData(detailedData);
+      setEditForm({
+        fullName: detailedData.fullName || '',
+        email: detailedData.email || '',
+        phoneNumber: detailedData.phoneNumber || '',
+        role: detailedData.role || '',
+        profileImage: detailedData.profileImage || null
+      });
+    } catch (error) {
+      console.error('Failed to fetch detailed user data:', error);
+      setDetailedUserData(user);
+      setEditForm({
+        fullName: user.fullName || '',
+        email: user.email || '',
+        phoneNumber: user.phoneNumber || '',
+        role: user.role || '',
+        profileImage: null
+      });
+    }
   };
 
   const handleEditChange = (e) => {
@@ -108,13 +134,53 @@ const CustomersPage = () => {
     setEditForm(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleProfileImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      ErrorMessageToast('Please select an image file');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      ErrorMessageToast('Image size must be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64Image = reader.result;
+      setEditForm(prev => ({
+        ...prev,
+        profileImage: base64Image
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeProfileImage = () => {
+    setEditForm(prev => ({
+      ...prev,
+      profileImage: null
+    }));
+  };
+
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     if (!editUser) return;
     try {
-      await updateUser(editUser.id, editForm);
+      const updateData = {
+        fullName: editForm.fullName,
+        email: editForm.email,
+        phoneNumber: editForm.phoneNumber,
+        role: editForm.role,
+        profileImage: editForm.profileImage || null
+      };
+      await updateUser(editUser.id, updateData);
       SuccesfulMessageToast("User updated successfully.");
       setEditUser(null);
+      setDetailedUserData(null);
       fetchUsers();
     } catch (error) {
       ErrorMessageToast(error.message || "Failed to update user.");
@@ -250,19 +316,28 @@ const CustomersPage = () => {
                       {filteredAdmins.map((user) => (
                         <tr key={user.id}>
                           <td>{user.id}</td>
-                          <td>
+                            <td>
                             <div className="d-flex align-items-center">
-                              <div className="avatar-circle bg-danger text-white me-2" style={{
-                                width: '40px',
-                                height: '40px',
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 'bold'
-                              }}>
-                                {user.fullName?.charAt(0)?.toUpperCase() || 'A'}
-                              </div>
+                              {user.profileImage ? (
+                                <img
+                                  src={user.profileImage}
+                                  alt={user.fullName}
+                                  className="rounded-circle me-2"
+                                  style={{ width: '40px', height: '40px', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <div className="avatar-circle bg-danger text-white me-2" style={{
+                                  width: '40px',
+                                  height: '40px',
+                                  borderRadius: '50%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: 'bold'
+                                }}>
+                                  {user.fullName?.charAt(0)?.toUpperCase() || 'A'}
+                                </div>
+                              )}
                               <span className="fw-medium">{user.fullName || 'N/A'}</span>
                             </div>
                           </td>
@@ -458,17 +533,26 @@ const CustomersPage = () => {
                             <td>{user.id}</td>
                             <td>
                               <div className="d-flex align-items-center">
-                                <div className="avatar-circle bg-primary text-white me-2" style={{
-                                  width: '40px',
-                                  height: '40px',
-                                  borderRadius: '50%',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontWeight: 'bold'
-                                }}>
-                                  {user.fullName?.charAt(0)?.toUpperCase() || 'U'}
-                                </div>
+                                {user.profileImage ? (
+                                  <img
+                                    src={user.profileImage}
+                                    alt={user.fullName}
+                                    className="rounded-circle me-2"
+                                    style={{ width: '40px', height: '40px', objectFit: 'cover' }}
+                                  />
+                                ) : (
+                                  <div className="avatar-circle bg-primary text-white me-2" style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: 'bold'
+                                  }}>
+                                    {user.fullName?.charAt(0)?.toUpperCase() || 'U'}
+                                  </div>
+                                )}
                                 <span className="fw-medium">{user.fullName || 'N/A'}</span>
                               </div>
                             </td>
@@ -525,28 +609,168 @@ const CustomersPage = () => {
       )}
 
       {viewUser && (
-        <Modal title="Customer Details" onClose={() => setViewUser(null)}>
-          <ul className="list-group mb-3">
-            <li className="list-group-item"><strong>Name:</strong> {viewUser.fullName}</li>
-            <li className="list-group-item"><strong>Email:</strong> {viewUser.email}</li>
-            <li className="list-group-item"><strong>Phone:</strong> {viewUser.phoneNumber || 'N/A'}</li>
-            <li className="list-group-item"><strong>Role:</strong> {viewUser.role}</li>
-            <li className="list-group-item">
-              <strong>Status:</strong>{' '}
-              <span className={`badge ${getStatusBadgeClass(getUserStatus(viewUser))} text-white ms-2`}>
-                {getUserStatus(viewUser).charAt(0).toUpperCase() + getUserStatus(viewUser).slice(1)}
-              </span>
-            </li>
-          </ul>
-          <button className="btn btn-secondary" onClick={() => setViewUser(null)}>Close</button>
+        <Modal title="Customer Details" onClose={() => {
+          setViewUser(null);
+          setDetailedUserData(null);
+        }}>
+          <div className="text-center mb-4">
+            {detailedUserData?.profileImage ? (
+              <img
+                src={detailedUserData.profileImage}
+                alt={detailedUserData.fullName}
+                className="rounded-circle mb-3"
+                style={{ width: '120px', height: '120px', objectFit: 'cover', border: '3px solid #0d6efd' }}
+              />
+            ) : (
+              <div
+                className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center mx-auto mb-3"
+                style={{
+                  width: '120px',
+                  height: '120px',
+                  fontSize: '3rem',
+                  fontWeight: 'bold'
+                }}
+              >
+                {detailedUserData?.fullName?.charAt(0)?.toUpperCase() || viewUser.fullName?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
+            )}
+            <h4 className="mb-1">{detailedUserData?.fullName || viewUser.fullName}</h4>
+            <p className="text-muted mb-0">{detailedUserData?.email || viewUser.email}</p>
+            <span className={`badge ${getRoleBadgeClass(detailedUserData?.role || viewUser.role)} text-white mt-2`}>
+              {detailedUserData?.role || viewUser.role}
+            </span>
+          </div>
+          
+          <div className="card mb-3">
+            <div className="card-body">
+              <h6 className="card-title mb-3"><i className="fas fa-info-circle me-2"></i>Account Information</h6>
+              <ul className="list-unstyled mb-0">
+                <li className="mb-2">
+                  <strong><i className="fas fa-user me-2 text-primary"></i>Full Name:</strong>
+                  <span className="ms-2">{detailedUserData?.fullName || viewUser.fullName || 'N/A'}</span>
+                </li>
+                <li className="mb-2">
+                  <strong><i className="fas fa-envelope me-2 text-primary"></i>Email:</strong>
+                  <span className="ms-2">{detailedUserData?.email || viewUser.email || 'N/A'}</span>
+                </li>
+                <li className="mb-2">
+                  <strong><i className="fas fa-phone me-2 text-primary"></i>Phone:</strong>
+                  <span className="ms-2">{detailedUserData?.phoneNumber || viewUser.phoneNumber || 'N/A'}</span>
+                </li>
+                <li className="mb-2">
+                  <strong><i className="fas fa-shield-alt me-2 text-primary"></i>Role:</strong>
+                  <span className={`badge ${getRoleBadgeClass(detailedUserData?.role || viewUser.role)} text-white ms-2`}>
+                    {detailedUserData?.role || viewUser.role || 'N/A'}
+                  </span>
+                </li>
+                <li className="mb-2">
+                  <strong><i className="fas fa-check-circle me-2 text-primary"></i>Status:</strong>
+                  <span className={`badge ${getStatusBadgeClass(getUserStatus(detailedUserData || viewUser))} text-white ms-2`}>
+                    {getUserStatus(detailedUserData || viewUser).charAt(0).toUpperCase() + getUserStatus(detailedUserData || viewUser).slice(1)}
+                  </span>
+                </li>
+                {detailedUserData?.createdAt && (
+                  <li className="mb-2">
+                    <strong><i className="fas fa-calendar-plus me-2 text-primary"></i>Member Since:</strong>
+                    <span className="ms-2">{new Date(detailedUserData.createdAt).toLocaleDateString()}</span>
+                  </li>
+                )}
+                {detailedUserData?.lastLogin && (
+                  <li className="mb-2">
+                    <strong><i className="fas fa-clock me-2 text-primary"></i>Last Login:</strong>
+                    <span className="ms-2">{new Date(detailedUserData.lastLogin).toLocaleString()}</span>
+                  </li>
+                )}
+                {detailedUserData?.skills && (
+                  <li className="mb-2">
+                    <strong><i className="fas fa-tools me-2 text-primary"></i>Skills:</strong>
+                    <span className="ms-2">{detailedUserData.skills}</span>
+                  </li>
+                )}
+                {detailedUserData?.experience && (
+                  <li className="mb-2">
+                    <strong><i className="fas fa-briefcase me-2 text-primary"></i>Experience:</strong>
+                    <span className="ms-2">{detailedUserData.experience} years</span>
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+          
+          <div className="d-flex justify-content-end gap-2">
+            <button className="btn btn-secondary" onClick={() => {
+              setViewUser(null);
+              setDetailedUserData(null);
+            }}>
+              Close
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                setViewUser(null);
+                openEditModal(detailedUserData || viewUser);
+              }}
+            >
+              <i className="fas fa-edit me-2"></i>Edit
+            </button>
+          </div>
         </Modal>
       )}
 
       {editUser && (
-        <Modal title="Edit Customer" onClose={() => setEditUser(null)}>
+        <Modal title="Edit Customer" onClose={() => {
+          setEditUser(null);
+          setDetailedUserData(null);
+        }}>
           <form onSubmit={handleUpdateUser}>
+            {/* Profile Image Section */}
+            <div className="mb-4 text-center">
+              <label className="form-label fw-bold d-block mb-3">Profile Picture</label>
+              {editForm.profileImage ? (
+                <div className="position-relative d-inline-block">
+                  <img
+                    src={editForm.profileImage}
+                    alt="Profile"
+                    className="rounded-circle mb-3"
+                    style={{ width: '120px', height: '120px', objectFit: 'cover', border: '3px solid #0d6efd' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm position-absolute top-0 end-0"
+                    onClick={removeProfileImage}
+                    style={{ margin: '5px' }}
+                  >
+                    <i className="fas fa-times"></i>
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className="rounded-circle bg-light border d-flex align-items-center justify-content-center mx-auto mb-3"
+                  style={{
+                    width: '120px',
+                    height: '120px',
+                    fontSize: '3rem',
+                    fontWeight: 'bold',
+                    color: '#6c757d'
+                  }}
+                >
+                  {editForm.fullName?.charAt(0)?.toUpperCase() || 'U'}
+                </div>
+              )}
+              <div>
+                <input
+                  type="file"
+                  className="form-control"
+                  accept="image/*"
+                  onChange={handleProfileImageUpload}
+                  style={{ maxWidth: '300px', margin: '0 auto' }}
+                />
+                <small className="text-muted d-block mt-2">Max size: 5MB. Recommended: Square image (200x200px)</small>
+              </div>
+            </div>
+
             <div className="mb-3">
-              <label className="form-label">Full Name</label>
+              <label className="form-label fw-bold">Full Name</label>
               <input
                 type="text"
                 className="form-control"
@@ -557,7 +781,7 @@ const CustomersPage = () => {
               />
             </div>
             <div className="mb-3">
-              <label className="form-label">Email</label>
+              <label className="form-label fw-bold">Email</label>
               <input
                 type="email"
                 className="form-control"
@@ -568,7 +792,7 @@ const CustomersPage = () => {
               />
             </div>
             <div className="mb-3">
-              <label className="form-label">Phone</label>
+              <label className="form-label fw-bold">Phone Number</label>
               <input
                 type="text"
                 className="form-control"
@@ -578,7 +802,7 @@ const CustomersPage = () => {
               />
             </div>
             <div className="mb-3">
-              <label className="form-label">Role</label>
+              <label className="form-label fw-bold">Role</label>
               <select
                 className="form-select"
                 name="role"
@@ -590,16 +814,23 @@ const CustomersPage = () => {
                 <option value="ADMIN">Admin</option>
                 <option value="WELDER">Welder</option>
                 <option value="USER">User</option>
-                <option value="buyer">Buyer</option>
-                <option value="farmer">Farmer</option>
+                <option value="BUYER">Buyer</option>
+                <option value="FARMER">Farmer</option>
               </select>
             </div>
             <div className="d-flex justify-content-end gap-2">
-              <button type="button" className="btn btn-secondary" onClick={() => setEditUser(null)}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setEditUser(null);
+                  setDetailedUserData(null);
+                }}
+              >
                 Cancel
               </button>
               <button type="submit" className="btn btn-primary">
-                Save Changes
+                <i className="fas fa-save me-2"></i>Save Changes
               </button>
             </div>
           </form>
@@ -615,13 +846,15 @@ const Modal = ({ title, children, onClose }) => (
   <div className="modal-backdrop-wrapper" style={{ position: 'fixed', inset: 0 }}>
     <div className="modal-backdrop show" style={{ zIndex: 1040 }}></div>
     <div className="modal d-block" tabIndex="-1" style={{ zIndex: 1050 }}>
-      <div className="modal-dialog">
+      <div className="modal-dialog modal-dialog-scrollable modal-lg">
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">{title}</h5>
             <button type="button" className="btn-close" onClick={onClose}></button>
           </div>
-          <div className="modal-body">{children}</div>
+          <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            {children}
+          </div>
         </div>
       </div>
     </div>

@@ -1,9 +1,11 @@
 // src/pages/Customer/component/OrderConfirmation.jsx
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 const OrderConfirmation = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <div className="min-vh-100 bg-light py-5">
@@ -13,22 +15,22 @@ const OrderConfirmation = () => {
             <div className="card border-0 shadow-sm">
               <div className="card-body py-5">
                 <i className="fas fa-check-circle text-success fs-1 mb-4"></i>
-                <h2 className="fw-bold text-dark mb-3">Order Confirmed!</h2>
+                <h2 className="fw-bold text-dark mb-3">{t('simpleOrderConfirmation.title')}</h2>
                 <p className="text-muted mb-4">
-                  Thank you for your purchase. Your order has been successfully processed.
+                  {t('simpleOrderConfirmation.message')}
                 </p>
                 <div className="d-grid gap-2">
                   <button 
                     className="btn btn-primary py-3"
                     onClick={() => navigate('/products')}
                   >
-                    Continue Shopping
+                    {t('simpleOrderConfirmation.continueShopping')}
                   </button>
                   <button 
                     className="btn btn-outline-secondary"
                     onClick={() => navigate('/')}
                   >
-                    Back to Home
+                    {t('simpleOrderConfirmation.backToHome')}
                   </button>
                 </div>
               </div>

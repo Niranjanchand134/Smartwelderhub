@@ -1,7 +1,14 @@
 // components/welder/pages/Materials.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import MaterialRequestForm from './MaterialRequestForm';
+import { getMaterialRequestsByWelderId } from '../../../services/materialRequestService';
+import { useAuth } from '../../../Context/AuthContext';
 
 const Materials = () => {
+    const { user } = useAuth();
+    const [showRequestForm, setShowRequestForm] = useState(false);
+    const [materialRequests, setMaterialRequests] = useState([]);
+    const [loading, setLoading] = useState(false);
     const materials = [
         {
             id: 1,
@@ -41,77 +48,272 @@ const Materials = () => {
         }
     ];
 
+    useEffect(() => {
+        if (user && user.id) {
+            fetchMaterialRequests();
+        }
+    }, [user]);
+
+    const fetchMaterialRequests = async () => {
+        if (!user || !user.id) return;
+        
+        setLoading(true);
+        try {
+            const requests = await getMaterialRequestsByWelderId(user.id);
+            setMaterialRequests(requests);
+        } catch (error) {
+            console.error('Failed to fetch material requests:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRequestSuccess = () => {
+        fetchMaterialRequests();
+    };
+
+    const getStatusBadgeClass = (status) => {
+        switch (status) {
+            case 'PENDING':
+                return 'bg-warning';
+            case 'APPROVED':
+                return 'bg-success';
+            case 'REJECTED':
+                return 'bg-danger';
+            case 'FULFILLED':
+                return 'bg-info';
+            default:
+                return 'bg-secondary';
+        }
+    };
+
+    const getPriorityBadgeClass = (priority) => {
+        switch (priority) {
+            case 'URGENT':
+                return 'bg-danger';
+            case 'HIGH':
+                return 'bg-warning';
+            case 'MEDIUM':
+                return 'bg-info';
+            case 'LOW':
+                return 'bg-secondary';
+            default:
+                return 'bg-secondary';
+        }
+    };
+
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
     return (
         <div className="container-fluid">
             <div className="d-sm-flex align-items-center justify-content-between mb-4">
-                <h1 className="h3 mb-0 text-gray-800">Material Management</h1>
-                <button className="btn btn-primary">
-                    <i className="fas fa-plus me-2"></i>Order Materials
+                <h1 className="h3 mb-0 text-gray-800">My Material Requests</h1>
+                <button 
+                    className="btn btn-primary"
+                    onClick={() => setShowRequestForm(true)}
+                >
+                    <i className="fas fa-plus me-2"></i>Request Material
                 </button>
             </div>
 
-            <div className="row">
-                {materials.map(material => (
-                    <div key={material.id} className="col-lg-6 mb-4">
-                        <div className={`card border-left-${
-                            material.status === 'In Stock' ? 'success' : 
-                            material.status === 'Low Stock' ? 'warning' : 'danger'
-                        } shadow h-100`}>
-                            <div className="card-body">
-                                <div className="d-flex justify-content-between align-items-start mb-3">
-                                    <h5 className="card-title text-primary">{material.name}</h5>
-                                    <span className={`badge ${
-                                        material.status === 'In Stock' ? 'bg-success' : 
-                                        material.status === 'Low Stock' ? 'bg-warning' : 'bg-danger'
-                                    }`}>
-                                        {material.status}
-                                    </span>
-                                </div>
-
-                                <div className="row mb-3">
-                                    <div className="col-6">
-                                        <strong>Current Stock:</strong>
-                                        <div className="h5 text-success">{material.currentStock}</div>
-                                    </div>
-                                    <div className="col-6">
-                                        <strong>Required:</strong>
-                                        <div className="h5 text-warning">{material.required}</div>
-                                    </div>
-                                </div>
-
-                                <div className="mb-3">
-                                    <strong>Jobs Requiring:</strong>
-                                    <div>
-                                        {material.jobs.map((job, index) => (
-                                            <span key={index} className="badge bg-light text-dark me-1 mb-1">
-                                                {job}
+            {/* Material Requests Section */}
+            <div className="mt-5">
+                {loading ? (
+                    <div className="text-center py-5">
+                        <div className="spinner-border text-primary" role="status">
+                            <span className="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                ) : materialRequests.length === 0 ? (
+                    <div className="alert alert-info">
+                        <i className="fas fa-info-circle me-2"></i>
+                        No material requests found. Click "Request Material" to create a new request.
+                    </div>
+                ) : (
+                    <div className="row">
+                        {materialRequests.map((request) => (
+                            <div key={request.id} className="col-lg-6 mb-4">
+                                <div className={`card border-left-${
+                                    request.status === 'APPROVED' ? 'success' : 
+                                    request.status === 'PENDING' ? 'warning' : 
+                                    request.status === 'REJECTED' ? 'danger' : 'info'
+                                } shadow h-100`}>
+                                    <div className="card-body">
+                                        <div className="d-flex justify-content-between align-items-start mb-3">
+                                            <h5 className="card-title text-primary">{request.materialName}</h5>
+                                            <span className={`badge ${getStatusBadgeClass(request.status)}`}>
+                                                {request.status}
                                             </span>
-                                        ))}
+                                        </div>
+
+                                        <div className="row mb-3">
+                                            <div className="col-6">
+                                                <strong>Quantity Requested:</strong>
+                                                <div className="h5 text-success">{request.quantity} {request.unit}</div>
+                                            </div>
+                                            <div className="col-6">
+                                                <strong>Priority:</strong>
+                                                <div className="h5 text-warning">
+                                                    <span className={`badge ${getPriorityBadgeClass(request.priority)}`}>
+                                                        {request.priority}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mb-3">
+                                            <strong>Material Type:</strong>
+                                            <div>
+                                                <span className="badge bg-light text-dark me-1 mb-1">
+                                                    {request.materialType.replace('_', ' ')}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="d-grid gap-2">
+                                            <button
+                                                className="btn btn-outline-primary"
+                                                data-bs-toggle="modal"
+                                                data-bs-target={`#requestModal${request.id}`}
+                                            >
+                                                <i className="fas fa-eye me-2"></i>
+                                                View Details
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
 
-                                <div className="d-grid gap-2">
-                                    {material.status === 'Order Needed' && (
-                                        <button className="btn btn-danger">
-                                            <i className="fas fa-shopping-cart me-2"></i>
-                                            Order Now
-                                        </button>
-                                    )}
-                                    {material.status === 'Low Stock' && (
-                                        <button className="btn btn-warning">
-                                            <i className="fas fa-bell me-2"></i>
-                                            Reorder Soon
-                                        </button>
-                                    )}
-                                    <button className="btn btn-outline-primary">
-                                        Update Stock
-                                    </button>
+            {/* Request Detail Modals */}
+            {materialRequests.map((request) => (
+                <div
+                    key={request.id}
+                    className="modal fade"
+                    id={`requestModal${request.id}`}
+                    tabIndex="-1"
+                    aria-labelledby={`requestModalLabel${request.id}`}
+                    aria-hidden="true"
+                >
+                    <div className="modal-dialog modal-lg">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title" id={`requestModalLabel${request.id}`}>
+                                    Material Request Details
+                                </h5>
+                                <button
+                                    type="button"
+                                    className="btn-close"
+                                    data-bs-dismiss="modal"
+                                    aria-label="Close"
+                                ></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="row mb-3">
+                                    <div className="col-md-6">
+                                        <strong>Request Number:</strong>
+                                        <p>{request.requestNumber}</p>
+                                    </div>
+                                    <div className="col-md-6">
+                                        <strong>Status:</strong>
+                                        <p>
+                                            <span className={`badge ${getStatusBadgeClass(request.status)}`}>
+                                                {request.status}
+                                            </span>
+                                        </p>
+                                    </div>
                                 </div>
+                                <div className="row mb-3">
+                                    <div className="col-md-6">
+                                        <strong>Material Name:</strong>
+                                        <p>{request.materialName}</p>
+                                    </div>
+                                    <div className="col-md-6">
+                                        <strong>Material Type:</strong>
+                                        <p>
+                                            <span className="badge bg-secondary">
+                                                {request.materialType.replace('_', ' ')}
+                                            </span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="row mb-3">
+                                    <div className="col-md-4">
+                                        <strong>Quantity:</strong>
+                                        <p>{request.quantity} {request.unit}</p>
+                                    </div>
+                                    <div className="col-md-4">
+                                        <strong>Priority:</strong>
+                                        <p>
+                                            <span className={`badge ${getPriorityBadgeClass(request.priority)}`}>
+                                                {request.priority}
+                                            </span>
+                                        </p>
+                                    </div>
+                                    <div className="col-md-4">
+                                        <strong>Requested Date:</strong>
+                                        <p>{formatDate(request.createdAt)}</p>
+                                    </div>
+                                </div>
+                                {request.description && (
+                                    <div className="mb-3">
+                                        <strong>Description:</strong>
+                                        <p>{request.description}</p>
+                                    </div>
+                                )}
+                                {request.adminNotes && (
+                                    <div className="mb-3">
+                                        <strong>Admin Notes:</strong>
+                                        <p className="text-info">{request.adminNotes}</p>
+                                    </div>
+                                )}
+                                {request.rejectionReason && (
+                                    <div className="mb-3">
+                                        <strong>Rejection Reason:</strong>
+                                        <p className="text-danger">{request.rejectionReason}</p>
+                                    </div>
+                                )}
+                                {request.approvedAt && (
+                                    <div className="mb-3">
+                                        <strong>Approved Date:</strong>
+                                        <p>{formatDate(request.approvedAt)}</p>
+                                    </div>
+                                )}
+                                {request.fulfilledAt && (
+                                    <div className="mb-3">
+                                        <strong>Fulfilled Date:</strong>
+                                        <p>{formatDate(request.fulfilledAt)}</p>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    data-bs-dismiss="modal"
+                                >
+                                    Close
+                                </button>
                             </div>
                         </div>
                     </div>
-                ))}
-            </div>
+                </div>
+            ))}
+
+            {/* Material Request Form Modal */}
+            {showRequestForm && (
+                <MaterialRequestForm
+                    onClose={() => setShowRequestForm(false)}
+                    onSuccess={handleRequestSuccess}
+                />
+            )}
         </div>
     );
 };

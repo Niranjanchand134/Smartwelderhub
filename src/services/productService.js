@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getAuthHeaders } from "../utils/authHelper";
 
 const API_BASE = "http://localhost:8080/api/products";
 
@@ -41,6 +42,28 @@ export const updateProduct = async (id, productData) => {
 export const deleteProduct = async (id) => {
   try {
     await axios.delete(`${API_BASE}/${id}`);
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const addProductReview = async (productId, rating, comment) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE}/${productId}/reviews`,
+      { rating, comment },
+      getAuthHeaders()
+    );
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const getProductReviews = async (productId) => {
+  try {
+    const response = await axios.get(`${API_BASE}/${productId}/reviews`);
+    return response.data;
   } catch (error) {
     handleError(error);
   }

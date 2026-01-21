@@ -1,8 +1,10 @@
+import { useTranslation } from 'react-i18next';
 import CustomProductOrder from "./CustomProductOrder";
 import Footer from "./Footer";
 import Header from "./Header";
 
 const Services = () => {
+    const { t } = useTranslation();
     return(
         <>
         <Header/>
@@ -13,12 +15,12 @@ const Services = () => {
                 <div className="row justify-content-center">
                     <div className="col-lg-7">
                         <div className="bg-white p-5">
-                            <h1 className="display-6 text-uppercase mb-3 animated slideInDown">Services</h1>
+                            <h1 className="display-6 text-uppercase mb-3 animated slideInDown">{t('services.title')}</h1>
                             <nav aria-label="breadcrumb animated slideInDown">
                                 <ol className="breadcrumb justify-content-center mb-0">
-                                    <li className="breadcrumb-item"><a href="#">Home</a></li>
-                                    <li className="breadcrumb-item"><a href="#">Pages</a></li>
-                                    <li className="breadcrumb-item" aria-current="page">Services</li>
+                                    <li className="breadcrumb-item"><a href="#">{t('services.breadcrumbHome')}</a></li>
+                                    <li className="breadcrumb-item"><a href="#">{t('services.breadcrumbPages')}</a></li>
+                                    <li className="breadcrumb-item" aria-current="page">{t('services.breadcrumbServices')}</li>
                                 </ol>
                             </nav>
                         </div>
@@ -32,7 +34,7 @@ const Services = () => {
         <div className="container-fluid service pb-6">
             <div className="container">
                 <div className="text-center mx-auto wow fadeInUp" data-wow-delay="0.1s" style={{ maxWidth: "600px" }}>
-                    <h1 className="display-6 text-uppercase mb-5">Reliable & High-Quality Welding Services</h1>
+                    <h1 className="display-6 text-uppercase mb-5">{t('services.reliableWeldingServices')}</h1>
                 </div>
                 <div className="row g-4">
                     <div className="col-lg-3 col-md-6 wow fadeInUp" data-wow-delay="0.1s">
@@ -40,11 +42,11 @@ const Services = () => {
                             <div className="service-inner pb-5">
                                 <img className="img-fluid w-100" src="./assets/image/service-1.jpg" alt=""/>
                                 <div className="service-text px-5 pt-4">
-                                    <h5 className="text-uppercase">Metal Works</h5>
-                                        <p>Custom metal fabrication for gates, grills, and structural components with precision engineering.
+                                    <h5 className="text-uppercase">{t('services.metalWorks')}</h5>
+                                        <p>{t('services.metalWorksDesc')}
                                         </p>
                                 </div>
-                                <a className="btn btn-light px-3" href="">Read More<i
+                                <a className="btn btn-light px-3" href="">{t('servicesPage.readMore')}<i
                                         className="bi bi-chevron-double-right ms-1"></i></a>
                             </div>
                         </div>
@@ -54,11 +56,11 @@ const Services = () => {
                             <div className="service-inner pb-5">
                                 <img className="img-fluid w-100" src="./assets/image/service-2.jpg" alt=""/>
                                 <div className="service-text px-5 pt-4">
-                                    <h5 className="text-uppercase">Steel welding</h5>
-                                        <p>Professional steel welding services for construction, industrial and residential projects.
+                                    <h5 className="text-uppercase">{t('services.steelWelding')}</h5>
+                                        <p>{t('services.steelWeldingDesc')}
                                         </p>
                                 </div>
-                                <a className="btn btn-light px-3" href="">Read More<i
+                                <a className="btn btn-light px-3" href="">{t('servicesPage.readMore')}<i
                                         className="bi bi-chevron-double-right ms-1"></i></a>
                             </div>
                         </div>
@@ -68,11 +70,11 @@ const Services = () => {
                             <div className="service-inner pb-5">
                                 <img className="img-fluid w-100" src="./assets/image/service-3.jpg" alt=""/>
                                 <div className="service-text px-5 pt-4">
-                                    <h5 className="text-uppercase">pipe welding</h5>
-                                        <p>Expert pipe welding for plumbing, industrial pipelines, and structural pipe systems.
+                                    <h5 className="text-uppercase">{t('services.pipeWelding')}</h5>
+                                        <p>{t('services.pipeWeldingDesc')}
                                         </p>
                                 </div>
-                                <a className="btn btn-light px-3" href="">Read More<i
+                                <a className="btn btn-light px-3" href="">{t('servicesPage.readMore')}<i
                                         className="bi bi-chevron-double-right ms-1"></i></a>
                             </div>
                         </div>
@@ -82,11 +84,11 @@ const Services = () => {
                             <div className="service-inner pb-5">
                                 <img className="img-fluid w-100" src="./assets/image/service-4.jpg" alt=""/>
                                 <div className="service-text px-5 pt-4">
-                                    <h5 className="text-uppercase">Custom welding</h5>
-                                        <p>Bespoke welding solutions tailored to your specific design requirements and measurements.
+                                    <h5 className="text-uppercase">{t('services.customWelding')}</h5>
+                                        <p>{t('services.customWeldingDesc')}
                                         </p>
                                 </div>
-                                <a className="btn btn-light px-3" href="">Read More<i
+                                <a className="btn btn-light px-3" href="">{t('servicesPage.readMore')}<i
                                         className="bi bi-chevron-double-right ms-1"></i></a>
                             </div>
                         </div>

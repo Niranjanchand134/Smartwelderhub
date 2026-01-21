@@ -117,4 +117,38 @@ export const updateDeliveryInfo = async (id, payload) => {
   }
 };
 
+export const deleteDeliveryInfo = async (id) => {
+  try {
+    const response = await axios.delete(`${API_BASE}/${id}`, getAuthHeaders());
+    return response.data;
+  } catch (error) {
+    // Handle 409 Conflict (address has associated orders)
+    if (error.response && error.response.status === 409) {
+      const errorData = error.response.data;
+      if (typeof errorData === 'string') {
+        throw new Error(errorData);
+      } else if (errorData.message) {
+        throw new Error(errorData.message);
+      } else {
+        throw new Error('Cannot delete address: This address is associated with existing orders. Please delete or update the orders first.');
+      }
+    }
+    
+    if (error.response && error.response.data) {
+      const errorData = error.response.data;
+      if (typeof errorData === 'string') {
+        throw new Error(errorData);
+      } else if (errorData.message) {
+        throw new Error(errorData.message);
+      } else {
+        throw new Error(JSON.stringify(errorData));
+      }
+    } else if (error.message) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("Failed to delete delivery info. Please try again.");
+    }
+  }
+};
+
 

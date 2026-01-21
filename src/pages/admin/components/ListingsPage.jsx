@@ -136,6 +136,8 @@ const ListingsPage = ({ setActiveMenu }) => {
     return 'bg-danger';
   };
 
+  const placeholderImage = 'https://images.unsplash.com/photo-1581091226033-d5c48150dbaa?w=300&h=200&fit=crop';
+
   return (
     <div>
       <div className="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3">
@@ -206,9 +208,20 @@ const ListingsPage = ({ setActiveMenu }) => {
                     <tr key={product.id}>
                       <td>
                         <div className="d-flex align-items-center">
-                          <div className="bg-success bg-opacity-10 text-success rounded p-2 me-3">
-                            <i className="fas fa-seedling"></i>
-                          </div>
+                          <img
+                            src={product.imageUrl || placeholderImage}
+                            alt={product.name}
+                            className="rounded me-3"
+                            style={{
+                              width: '50px',
+                              height: '50px',
+                              objectFit: 'cover',
+                              border: '1px solid #dee2e6'
+                            }}
+                            onError={(e) => {
+                              e.target.src = placeholderImage;
+                            }}
+                          />
                           <div>
                             <div className="fw-bold">{product.name}</div>
                             <small className="text-muted">
@@ -269,6 +282,27 @@ const ListingsPage = ({ setActiveMenu }) => {
       {/* View Modal */}
       {viewProduct && (
         <Modal title="Product Details" onClose={() => setViewProduct(null)}>
+          {/* Image Preview Section */}
+          <div className="mb-4">
+            <h6 className="fw-bold mb-3">Product Image</h6>
+            <div className="text-center">
+              <img
+                src={viewProduct.imageUrl || placeholderImage}
+                alt={viewProduct.name}
+                className="img-fluid rounded shadow-sm border"
+                style={{ 
+                  maxHeight: '300px', 
+                  width: '100%', 
+                  objectFit: 'contain',
+                  backgroundColor: '#f8f9fa'
+                }}
+                onError={(e) => {
+                  e.target.src = placeholderImage;
+                }}
+              />
+            </div>
+          </div>
+          
           <ul className="list-group mb-3">
             <li className="list-group-item"><strong>Name:</strong> {viewProduct.name}</li>
             <li className="list-group-item"><strong>Category:</strong> {viewProduct.category}</li>
@@ -362,13 +396,15 @@ const Modal = ({ title, children, onClose }) => (
   <div className="modal-backdrop-wrapper" style={{ position: 'fixed', inset: 0 }}>
     <div className="modal-backdrop show" style={{ zIndex: 1040 }}></div>
     <div className="modal d-block" tabIndex="-1" style={{ zIndex: 1050 }}>
-      <div className="modal-dialog">
+      <div className="modal-dialog modal-dialog-scrollable">
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">{title}</h5>
             <button type="button" className="btn-close" onClick={onClose}></button>
           </div>
-          <div className="modal-body">{children}</div>
+          <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            {children}
+          </div>
         </div>
       </div>
     </div>

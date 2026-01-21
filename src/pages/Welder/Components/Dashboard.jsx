@@ -1,77 +1,147 @@
 // components/welder/pages/Dashboard.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../../Context/AuthContext';
+import { getWelderDashboard } from '../../../services/customOrderService';
+import { ErrorMessageToast } from '../../../utils/Tostify.util';
 
 const Dashboard = ({ onViewJob, onNavigate }) => {
-    const stats = [
+    const { user } = useAuth();
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState([
         {
             title: 'New Orders',
-            value: '5',
+            value: '0',
             icon: 'fas fa-inbox',
             color: 'primary',
-            change: '+2',
-            onClick: () => onNavigate('job-management')
+            change: '',
+            onClick: () => onNavigate('orders')
         },
         {
             title: 'Orders in Progress',
-            value: '3',
+            value: '0',
             icon: 'fas fa-hammer',
             color: 'warning',
-            change: '+1',
-            onClick: () => onNavigate('job-management')
+            change: '',
+            onClick: () => onNavigate('orders')
         },
-        {
-            title: 'Ready for Delivery',
-            value: '2',
-            icon: 'fas fa-check-circle',
-            color: 'success',
-            change: '+1',
-            onClick: () => onNavigate('job-management')
-        },
-    ];
+    ]);
+    const [recentOrders, setRecentOrders] = useState({
+        new: [],
+        inProgress: []
+    });
+    const [materialRequirements, setMaterialRequirements] = useState([]);
 
-    const recentOrders = {
-        new: [
-            { id: 101, customer: 'John Sharma', product: 'Main Gate', time: '2 hours ago' },
-            { id: 102, customer: 'Sita Rai', product: 'Window Grill', time: '5 hours ago' },
-            { id: 103, customer: 'Mike Smith', product: 'Stair Railing', time: '1 day ago' }
-        ],
-        inProgress: [
-            { id: 201, customer: 'Anita Gurung', product: 'Custom Table', progress: 75 },
-            { id: 202, customer: 'Raj Kumar', product: 'Security Grill', progress: 50 }
-        ],
-        ready: [
-            { id: 301, customer: 'David Wilson', product: 'Office Gate', status: 'Ready for pickup' },
-            { id: 302, customer: 'Priya Shrestha', product: 'Balcony Railing', status: 'Ready for delivery' }
-        ]
+    useEffect(() => {
+        if (user && user.id) {
+            fetchDashboardData();
+        }
+    }, [user]);
+
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+            const data = await getWelderDashboard(user.id);
+            
+            // Update stats
+            setStats([
+                {
+                    title: 'New Orders',
+                    value: data.stats?.newOrders?.toString() || '0',
+                    icon: 'fas fa-inbox',
+                    color: 'primary',
+                    change: '',
+                    onClick: () => onNavigate('orders')
+                },
+                {
+                    title: 'Orders in Progress',
+                    value: data.stats?.inProgress?.toString() || '0',
+                    icon: 'fas fa-hammer',
+                    color: 'warning',
+                    change: '',
+                    onClick: () => onNavigate('orders')
+                },
+            ]);
+
+            // Format recent orders
+            const formatTimeAgo = (dateString) => {
+                if (!dateString) return 'Recently';
+                const date = new Date(dateString);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+                
+                if (diffMins < 60) return `${diffMins} minutes ago`;
+                if (diffHours < 24) return `${diffHours} hours ago`;
+                return `${diffDays} days ago`;
+            };
+
+            setRecentOrders({
+                new: (data.newOrders || []).map(order => ({
+                    id: order.id,
+                    orderNumber: order.orderNumber,
+                    customer: order.customer || 'Unknown',
+                    product: order.product || 'Custom Product',
+                    time: formatTimeAgo(order.createdAt)
+                })),
+                inProgress: (data.inProgressOrders || []).map(order => ({
+                    id: order.id,
+                    orderNumber: order.orderNumber,
+                    customer: order.customer || 'Unknown',
+                    product: order.product || 'Custom Product',
+                    progress: order.progress || 0
+                }))
+            });
+
+            // Material requirements from backend
+            setMaterialRequirements(data.materialRequirements || []);
+        } catch (error) {
+            ErrorMessageToast(error.message || 'Failed to load dashboard data');
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const materialRequirements = [
-        { material: 'MS Steel', quantity: '45 kg', jobs: '3 orders', status: 'In Stock' },
-        { material: 'Stainless Steel', quantity: '25 kg', jobs: '2 orders', status: 'Low Stock' },
-        { material: 'Iron Rods', quantity: '30 pieces', jobs: '2 orders', status: 'In Stock' },
-        { material: 'Welding Electrodes', quantity: '5 packs', jobs: 'All orders', status: 'Order Needed' }
-    ];
+    const handleViewJob = (order) => {
+        onViewJob(order);
+        onNavigate('job-details');
+    };
 
-    const aiDesignSuggestions = [
-        {
-            id: 1,
-            jobId: 101,
-            customer: 'John Sharma',
-            design: 'Modern Gate with Geometric Pattern',
-            improvement: '30% stronger structure',
-            materialSave: 'Save 15% material',
-            timeSave: '2 hours faster fabrication'
-        },
-        {
-            id: 2,
-            jobId: 102,
-            customer: 'Sita Rai',
-            design: 'Minimalist Window Grill',
-            improvement: 'Better airflow design',
-            materialSave: 'Save 10% material',
-            timeSave: '1 hour faster'
+    const handleAcceptOrder = (orderId) => {
+        // TODO: Implement accept order functionality
+        console.log('Accept order:', orderId);
+    };
+
+    const handleRejectOrder = (orderId) => {
+        // TODO: Implement reject order functionality
+        console.log('Reject order:', orderId);
+    };
+
+    const handleUpdateProgress = (orderId) => {
+        const order = recentOrders.inProgress.find(o => o.id === orderId);
+        if (order) {
+            onViewJob(order);
+            onNavigate('orders');
         }
-    ];
+    };
+
+    const handleMarkComplete = (orderId) => {
+        // TODO: Implement mark complete functionality
+        console.log('Mark complete:', orderId);
+    };
+
+    if (loading) {
+        return (
+            <div className="container-fluid">
+                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+                    <div className="spinner-border text-primary" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="container-fluid">
@@ -79,10 +149,7 @@ const Dashboard = ({ onViewJob, onNavigate }) => {
             <div className="d-sm-flex align-items-center justify-content-between mb-4">
                 <h1 className="h3 mb-0 text-gray-800">Welder Dashboard</h1>
                 <div className="btn-group">
-                    <button className="btn btn-primary">
-                        <i className="fas fa-plus me-2"></i>New Quote
-                    </button>
-                    <button className="btn btn-outline-primary">
+                    <button className="btn btn-outline-primary" onClick={fetchDashboardData}>
                         <i className="fas fa-sync-alt me-2"></i>Refresh
                     </button>
                 </div>
@@ -91,7 +158,7 @@ const Dashboard = ({ onViewJob, onNavigate }) => {
             {/* Stats Cards */}
             <div className="row">
                 {stats.map((stat, index) => (
-                    <div key={index} className="col-xl-4 col-md-6 mb-4">
+                    <div key={index} className="col-xl-6 col-md-6 mb-4">
                         <div 
                             className={`card border-left-${stat.color} shadow h-100 py-2 cursor-pointer`}
                             onClick={stat.onClick}
@@ -136,30 +203,42 @@ const Dashboard = ({ onViewJob, onNavigate }) => {
                             <span className="badge bg-light text-primary">{recentOrders.new.length}</span>
                         </div>
                         <div className="card-body">
-                            {recentOrders.new.map(order => (
-                                <div key={order.id} className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
-                                    <div>
-                                        <h6 className="mb-1">#{order.id} - {order.product}</h6>
-                                        <small className="text-muted">Customer: {order.customer}</small>
-                                        <br/>
-                                        <small className="text-muted">{order.time}</small>
-                                    </div>
-                                    <div>
-                                        <button className="btn btn-success btn-sm me-1">
-                                            Accept
-                                        </button>
-                                        <button className="btn btn-danger btn-sm">
-                                            Reject
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                            <button 
-                                className="btn btn-outline-primary btn-sm w-100 mt-2"
-                                onClick={() => onNavigate('job-management')}
-                            >
-                                View All New Orders
-                            </button>
+                            {recentOrders.new.length === 0 ? (
+                                <p className="text-muted text-center mb-0">No new orders</p>
+                            ) : (
+                                <>
+                                    {recentOrders.new.map(order => (
+                                        <div key={order.id} className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+                                            <div style={{ cursor: 'pointer' }} onClick={() => handleViewJob(order)}>
+                                                <h6 className="mb-1">#{order.orderNumber || order.id} - {order.product}</h6>
+                                                <small className="text-muted">Customer: {order.customer}</small>
+                                                <br/>
+                                                <small className="text-muted">{order.time}</small>
+                                            </div>
+                                            <div>
+                                                <button 
+                                                    className="btn btn-success btn-sm me-1"
+                                                    onClick={() => handleAcceptOrder(order.id)}
+                                                >
+                                                    Accept
+                                                </button>
+                                                <button 
+                                                    className="btn btn-danger btn-sm"
+                                                    onClick={() => handleRejectOrder(order.id)}
+                                                >
+                                                    Reject
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <button 
+                                        className="btn btn-outline-primary btn-sm w-100 mt-2"
+                                        onClick={() => onNavigate('orders')}
+                                    >
+                                        View All New Orders
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -174,32 +253,53 @@ const Dashboard = ({ onViewJob, onNavigate }) => {
                             </h6>
                         </div>
                         <div className="card-body">
-                            {recentOrders.inProgress.map(order => (
-                                <div key={order.id} className="mb-3">
-                                    <div className="d-flex justify-content-between align-items-center mb-1">
-                                        <h6 className="mb-0">#{order.id} - {order.product}</h6>
-                                        <span className="badge bg-primary">{order.progress}%</span>
-                                    </div>
-                                    <div className="progress mb-2">
-                                        <div 
-                                            className="progress-bar progress-bar-striped progress-bar-animated" 
-                                            style={{width: `${order.progress}%`}}
-                                        >
-                                            {order.progress}%
+                            {recentOrders.inProgress.length === 0 ? (
+                                <p className="text-muted text-center mb-0">No orders in progress</p>
+                            ) : (
+                                recentOrders.inProgress.map(order => (
+                                    <div key={order.id} className="mb-3">
+                                        <div className="d-flex justify-content-between align-items-center mb-1">
+                                            <h6 
+                                                className="mb-0" 
+                                                style={{ cursor: 'pointer' }}
+                                                onClick={() => handleViewJob(order)}
+                                            >
+                                                #{order.orderNumber || order.id} - {order.product}
+                                            </h6>
+                                            <span className="badge bg-primary">{order.progress}%</span>
+                                        </div>
+                                        <div className="progress mb-2">
+                                            <div 
+                                                className="progress-bar progress-bar-striped progress-bar-animated" 
+                                                style={{width: `${order.progress}%`}}
+                                            >
+                                                {order.progress}%
+                                            </div>
+                                        </div>
+                                        <div className="d-flex gap-2">
+                                            <button 
+                                                className="btn btn-outline-primary btn-sm"
+                                                onClick={() => handleUpdateProgress(order.id)}
+                                            >
+                                                Update Progress
+                                            </button>
+                                            <button 
+                                                className="btn btn-outline-success btn-sm"
+                                                onClick={() => handleMarkComplete(order.id)}
+                                            >
+                                                Mark Complete
+                                            </button>
                                         </div>
                                     </div>
-                                    <div className="d-flex gap-2">
-                                        <button className="btn btn-outline-primary btn-sm">Update Progress</button>
-                                        <button className="btn btn-outline-success btn-sm">Mark Complete</button>
-                                    </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>
 
                 {/* Material Requirements */}
-                <div className="card shadow">
+                <div className="col-12">
+                    <div className="card shadow">
                     <div className="card-header bg-info text-white py-3">
                         <h6 className="m-0 font-weight-bold">
                             <i className="fas fa-boxes me-2"></i>
@@ -207,28 +307,34 @@ const Dashboard = ({ onViewJob, onNavigate }) => {
                         </h6>
                     </div>
                     <div className="card-body">
-                        {materialRequirements.map((material, index) => (
-                            <div key={index} className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
-                                <div>
-                                    <h6 className="mb-1">{material.material}</h6>
-                                    <small className="text-muted">
-                                        {material.quantity} • {material.jobs}
-                                    </small>
+                        {materialRequirements.length === 0 ? (
+                            <p className="text-muted text-center mb-3">No material requirements</p>
+                        ) : (
+                            materialRequirements.map((material, index) => (
+                                <div key={index} className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+                                    <div>
+                                        <h6 className="mb-1">{material.material}</h6>
+                                        <small className="text-muted">
+                                            {material.quantity} • {material.jobs}
+                                        </small>
+                                    </div>
+                                    <span className={`badge ${
+                                        material.status === 'In Stock' ? 'bg-success' : 
+                                        material.status === 'Approved' ? 'bg-info' :
+                                        material.status === 'Pending' ? 'bg-warning' : 'bg-danger'
+                                    }`}>
+                                        {material.status}
+                                    </span>
                                 </div>
-                                <span className={`badge ${
-                                    material.status === 'In Stock' ? 'bg-success' : 
-                                    material.status === 'Low Stock' ? 'bg-warning' : 'bg-danger'
-                                }`}>
-                                    {material.status}
-                                </span>
-                            </div>
-                        ))}
+                            ))
+                        )}
                         <button 
                             className="btn btn-outline-info btn-sm w-100"
                             onClick={() => onNavigate('materials')}
                         >
                             Manage Materials
                         </button>
+                    </div>
                     </div>
                 </div>
             </div>

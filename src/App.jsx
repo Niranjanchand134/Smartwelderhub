@@ -12,9 +12,12 @@ import '@fortawesome/fontawesome-free/css/all.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import ContactUs from "./pages/Customer/component/ContactUs.jsx";
 import Services from "./pages/Customer/component/Services.jsx";
+import AboutUs from "./pages/Customer/component/AboutUs.jsx";
 import Error_404 from "./utils/Error_404.jsx";
 import Login from "./pages/Customer/auth/Login.jsx";
 import ForgetPassword from "./pages/Customer/auth/ForgotPassword.jsx";
+import VerifyOTP from "./pages/Customer/auth/VerifyOTP.jsx";
+import ChangePassword from "./pages/Customer/auth/ChangePassword.jsx";
 import AdminPanel from "./pages/admin/AdminPanel.jsx";
 import Products from "./pages/Customer/component/Products.jsx";
 import ProductDetail from "./pages/Customer/component/ProductDetail.jsx";
@@ -30,6 +33,12 @@ import WelderDashboard from "./pages/Welder/WelderDashboard.jsx";
 import CustomerOrderConfirmation from "./pages/Customer/component/CustomerOrderConfirmation.jsx";
 import CustomOrderReview from "./pages/Customer/component/CustomOrderReview.jsx";
 import CustomProductOrder from "./pages/Customer/component/CustomProductOrder.jsx";
+import UserProfile from "./pages/Customer/component/UserProfile.jsx";
+import PaymentSuccess from "./pages/Customer/component/PaymentSuccess.jsx";
+import PaymentFailure from "./pages/Customer/component/PaymentFailure.jsx";
+import ScrollToTop from "./components/ScrollToTop.jsx";
+import PageTransition from "./components/PageTransition.jsx";
+import ChatWidget from "./components/ChatWidget.jsx";
 
 
 
@@ -40,7 +49,9 @@ function App() {
     <AuthProvider>
       <CartProvider>
         <BrowserRouter>
+        <ScrollToTop />
         <ToastContainer/>
+        <PageTransition>
           <Routes>
             {/* Public Routes - Redirect admins to admin panel */}
             <Route 
@@ -60,6 +71,14 @@ function App() {
               }
             />
             <Route 
+              path="aboutus" 
+              element={
+                <AdminRedirectWrapper>
+                  <AboutUs/>
+                </AdminRedirectWrapper>
+              }
+            />
+            <Route 
               path="Services" 
               element={
                 <AdminRedirectWrapper>
@@ -70,6 +89,8 @@ function App() {
             <Route path="Error-404" element={<Error_404/>}/>
             <Route path="login" element={<Login/>}/>
             <Route path="forgetpassword" element={<ForgetPassword/>}/>
+            <Route path="verifyOTP" element={<VerifyOTP/>}/>
+            <Route path="changePassword" element={<ChangePassword/>}/>
             <Route 
               path="products" 
               element={
@@ -88,6 +109,14 @@ function App() {
             />
 
             {/* Protected User Routes - Block ADMIN access */}
+            <Route 
+              path="profile" 
+              element={
+                <UserRoute>
+                  <UserProfile/>
+                </UserRoute>
+              }
+            />
             <Route 
               path="cart" 
               element={
@@ -149,7 +178,19 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            
+            {/* Payment Routes */}
+            <Route 
+              path="/payment/success" 
+              element={<PaymentSuccess />}
+            />
+            <Route 
+              path="/payment/failure" 
+              element={<PaymentFailure />}
+            />
           </Routes>
+        </PageTransition>
+        <ChatWidget />
         </BrowserRouter>
       </CartProvider>
     </AuthProvider>

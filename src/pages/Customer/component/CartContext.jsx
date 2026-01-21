@@ -89,14 +89,22 @@ export const CartProvider = ({ children }) => {
     return cartItems.reduce((total, item) => total + item.quantity, 0);
   };
 
+  // Calculate subtotal
+  const subtotal = cartItems.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0);
+
   const value = {
+    // Original properties (for backward compatibility)
     cartItems,
     addToCart,
     removeFromCart,
     updateQuantity,
     clearCart,
     getCartTotal,
-    getCartItemsCount
+    getCartItemsCount,
+    // Additional properties expected by Checkout.jsx
+    items: cartItems, // Alias for cartItems
+    subtotal, // Calculated subtotal
+    removeItem: removeFromCart // Alias for removeFromCart
   };
 
   return (

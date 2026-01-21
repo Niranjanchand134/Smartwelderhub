@@ -2,12 +2,15 @@ import React, { useState, useRef, useEffect } from "react";
 import { useCart } from "./CartContext";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../Context/AuthContext";
+import { useTranslation } from "react-i18next";
 import NotificationDropdown from "../../../components/NotificationDropdown";
+import LanguageSwitcher from "../../../components/LanguageSwitcher";
 
 const Header = () => {
   const { getCartItemsCount } = useCart();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const cartItemsCount = typeof getCartItemsCount === "function" ? getCartItemsCount() : 0;
   
   // Profile dropdown state
@@ -63,16 +66,16 @@ const Header = () => {
         <div className="container py-3">
           <div className="d-flex align-items-center">
             <a href="/">
-              <h2 className="text-white fw-bold m-0">WELDORK</h2>
+              <h2 className="text-white fw-bold m-0">SmartWeld</h2>
             </a>
             <div className="ms-auto d-flex align-items-center">
               <small className="ms-4"><i className="fa fa-map-marker-alt me-2"></i>Lalitpur, kumaripati</small>
               <small className="ms-4"><i className="fa fa-envelope me-2"></i>info@example.com</small>
               <small className="ms-4"><i className="fa fa-phone-alt me-2"></i>+977- 9865000000</small>
               <div className="ms-3 d-flex">
-                <a className="btn btn-sm-square btn-light text-primary rounded-circle mx-1" href=""><i className="fab fa-facebook-f"></i></a>
-                <a className="btn btn-sm-square btn-light text-primary rounded-circle mx-1" href=""><i className="fab fa-twitter"></i></a>
-                <a className="btn btn-sm-square btn-light text-primary rounded-circle mx-1" href=""><i className="fab fa-linkedin-in"></i></a>
+                <a className="btn btn-sm-square btn-light text-primary rounded-circle mx-1 d-flex justify-content-center align-items-center" href=""><i className="fab fa-facebook-f"></i></a>
+                <a className="btn btn-sm-square btn-light text-primary rounded-circle mx-1 d-flex justify-content-center align-items-center" href=""><i className="fab fa-twitter"></i></a>
+                <a className="btn btn-sm-square btn-light text-primary rounded-circle mx-1 d-flex justify-content-center align-items-center" href=""><i className="fab fa-linkedin-in"></i></a>
               </div>
             </div>
           </div>
@@ -86,6 +89,9 @@ const Header = () => {
 
           {/* Cart & Login - Visible on mobile */}
           <div className="d-flex align-items-center d-lg-none gap-2">
+            {/* Language Switcher */}
+            <LanguageSwitcher />
+            
             {/* Cart Icon */}
             <button 
               className="btn btn-outline-dark position-relative" 
@@ -134,25 +140,22 @@ const Header = () => {
                        }}>
                     {getInitials()}
                   </div>
-                  <i class="fa fa-chevron-down" aria-hidden="true"></i>
+                  <i className="fa fa-chevron-down" aria-hidden="true"></i>
                 </button>
                 {profileOpenMobile && (
                   <div className="dropdown-menu show" style={{ display: 'block', right: 0, left: 'auto', minWidth: '200px' }}>
                     <div className="dropdown-header">
                       <div className="fw-bold">{userName}</div>
-                      <small className="text-muted">{user?.email || 'User Account'}</small>
+                      <small className="text-muted">{user?.email || t('common.userAccount')}</small>
                     </div>
                     <div className="dropdown-divider"></div>
-                    <a className="dropdown-item" href="#">
-                      <i className="fas fa-user me-2"></i>Profile
-                    </a>
-                    <a className="dropdown-item" href="#">
-                      <i className="fas fa-cog me-2"></i>Settings
+                    <a className="dropdown-item" href="/profile">
+                      <i className="fas fa-user me-2"></i>{t('common.profile')}
                     </a>
                     <div className="dropdown-divider"></div>
                     {user.role === 'ADMIN' && (
                       <a className="dropdown-item" href="/admin">
-                        <i className="fas fa-user-shield me-2"></i>Admin Panel
+                        <i className="fas fa-user-shield me-2"></i>{t('common.adminPanel')}
                       </a>
                     )}
                     <button 
@@ -163,7 +166,7 @@ const Header = () => {
                       }}
                       style={{ border: 'none', background: 'none', width: '100%', textAlign: 'left' }}
                     >
-                      <i className="fas fa-sign-out-alt me-2"></i>Logout
+                      <i className="fas fa-sign-out-alt me-2"></i>{t('common.logout')}
                     </button>
                   </div>
                 )}
@@ -190,41 +193,44 @@ const Header = () => {
             {/* Navigation Links */}
             <ul className="navbar-nav me-auto mb-2 mb-lg-0">
               <li className="nav-item">
-                <a className="nav-link active" href="/">Home</a>
+                <a className="nav-link active" href="/">{t('common.home')}</a>
               </li>
               <li className="nav-item">
-                <a className="nav-link" href="/custom-welding">About</a>
+                <a className="nav-link" href="/aboutus">{t('common.about')}</a>
               </li>
               <li className="nav-item">
-                <a className="nav-link" href="/services">Services</a>
+                <a className="nav-link" href="/services">{t('common.services')}</a>
               </li>
               <li className="nav-item">
-                <a className="nav-link" href="/products">Products</a>
+                <a className="nav-link" href="/products">{t('common.products')}</a>
               </li>
               <li className="nav-item dropdown">
                 <a className="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                  Pages
+                  {t('common.pages')}
                 </a>
                 <ul className="dropdown-menu">
-                  <li><a className="dropdown-item" href="/feature">Features</a></li>
-                  <li><a className="dropdown-item" href="/team">Our Team</a></li>
-                  <li><a className="dropdown-item" href="/testimonial">Testimonial</a></li>
-                  <li><a className="dropdown-item" href="/appointment">Appointment</a></li>
-                  <li><a className="dropdown-item" href="/Error-404">404 Page</a></li>
+                  <li><a className="dropdown-item" href="/feature">{t('common.features')}</a></li>
+                  <li><a className="dropdown-item" href="/team">{t('common.ourTeam')}</a></li>
+                  <li><a className="dropdown-item" href="/testimonial">{t('common.testimonial')}</a></li>
+                  <li><a className="dropdown-item" href="/appointment">{t('common.appointment')}</a></li>
+                  <li><a className="dropdown-item" href="/Error-404">{t('common.404Page')}</a></li>
                 </ul>
               </li>
               <li className="nav-item">
-                <a className="nav-link" href="/contactus">Contact</a>
+                <a className="nav-link" href="/contactus">{t('common.contact')}</a>
               </li>
             </ul>
 
             {/* Cart & Login - Visible on desktop */}
             <div className="d-flex align-items-center ms-lg-auto gap-2">
+              {/* Language Switcher */}
+              <LanguageSwitcher />
+              
               {/* Cart Icon */}
               <button 
                 className="btn btn-outline-dark position-relative"
                 onClick={() => navigate('/cart')}
-                style={{ padding: '8px 12px' }}
+                style={{ padding: '6px 12px' }}
               >
                 <i className="fas fa-shopping-cart"></i>
                 {cartItemsCount > 0 && (
@@ -273,19 +279,16 @@ const Header = () => {
                     <div className="dropdown-menu show" style={{ display: 'block', right: 0, left: 'auto', minWidth: '200px' }}>
                       <div className="dropdown-header">
                         <div className="fw-bold">{userName}</div>
-                        <small className="text-muted">{user?.email || 'User Account'}</small>
+                        <small className="text-muted">{user?.email || t('common.userAccount')}</small>
                       </div>
                       <div className="dropdown-divider"></div>
-                      <a className="dropdown-item" href="#">
-                        <i className="fas fa-user me-2"></i>Profile
-                      </a>
-                      <a className="dropdown-item" href="#">
-                        <i className="fas fa-cog me-2"></i>Settings
+                      <a className="dropdown-item" href="/profile">
+                        <i className="fas fa-user me-2"></i>{t('common.profile')}
                       </a>
                       <div className="dropdown-divider"></div>
                       {user.role === 'ADMIN' && (
                         <a className="dropdown-item" href="/admin">
-                          <i className="fas fa-user-shield me-2"></i>Admin Panel
+                          <i className="fas fa-user-shield me-2"></i>{t('common.adminPanel')}
                         </a>
                       )}
                       <button 
@@ -296,14 +299,14 @@ const Header = () => {
                         }}
                         style={{ border: 'none', background: 'none', width: '100%', textAlign: 'left' }}
                       >
-                        <i className="fas fa-sign-out-alt me-2"></i>Logout
+                        <i className="fas fa-sign-out-alt me-2"></i>{t('common.logout')}
                       </button>
                     </div>
                   )}
                 </div>
               ) : (
                 <a href="/login" className="btn btn-primary">
-                  Login / SignUp
+                  {t('common.loginSignup')}
                 </a>
               )}
             </div>

@@ -1,6 +1,7 @@
 // components/CustomOrderReview.js
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { getCustomOrderById, addReviewAndRating } from '../../../services/customOrderService';
 import { SuccesfulMessageToast, ErrorMessageToast } from '../../../utils/Tostify.util';
 import Header from './Header';
@@ -9,6 +10,7 @@ import Footer from './Footer';
 const CustomOrderReview = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState(0);
@@ -32,7 +34,7 @@ const CustomOrderReview = () => {
         setReviewComment(data.reviewComment);
       }
     } catch (error) {
-      ErrorMessageToast(error.message || 'Failed to load order details');
+      ErrorMessageToast(error.message || t('rateExperience.failedToLoadOrder'));
     } finally {
       setLoading(false);
     }
@@ -40,17 +42,17 @@ const CustomOrderReview = () => {
 
   const handleSubmitReview = async () => {
     if (rating === 0) {
-      ErrorMessageToast('Please select a rating');
+      ErrorMessageToast(t('rateExperience.pleaseSelectRating'));
       return;
     }
 
     setSubmitting(true);
     try {
       await addReviewAndRating(id, rating, reviewComment);
-      SuccesfulMessageToast('Thank you for your review!');
+      SuccesfulMessageToast(t('rateExperience.thankYouForReview'));
       navigate('/custom-product-order');
     } catch (error) {
-      ErrorMessageToast(error.message || 'Failed to submit review');
+      ErrorMessageToast(error.message || t('rateExperience.failedToSubmitReview'));
     } finally {
       setSubmitting(false);
     }
@@ -61,7 +63,7 @@ const CustomOrderReview = () => {
       <div className="container-fluid py-5">
         <div className="text-center">
           <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
+            <span className="visually-hidden">{t('rateExperience.loading')}</span>
           </div>
         </div>
       </div>
@@ -71,7 +73,7 @@ const CustomOrderReview = () => {
   if (!order) {
     return (
       <div className="container-fluid py-5">
-        <div className="alert alert-danger">Order not found</div>
+        <div className="alert alert-danger">{t('rateExperience.orderNotFound')}</div>
       </div>
     );
   }
@@ -87,19 +89,19 @@ const CustomOrderReview = () => {
               <div className="card-header bg-primary text-white">
                 <h4 className="mb-0">
                   <i className="fas fa-star me-2"></i>
-                  Rate Your Experience
+                  {t('rateExperience.title')}
                 </h4>
               </div>
               <div className="card-body p-5">
                 <div className="text-center mb-4">
-                  <h5>Order #{order.orderNumber || order.id}</h5>
+                  <h5>{t('rateExperience.orderNumber')}{order.orderNumber || order.id}</h5>
                   <p className="text-muted">{order.productType} - {order.materialType}</p>
                 </div>
 
                 {/* Rating Stars */}
                 <div className="mb-4">
                   <label className="form-label fw-bold d-block text-center mb-3">
-                    How would you rate this service? *
+                    {t('rateExperience.howWouldYouRate')}
                   </label>
                   <div className="d-flex justify-content-center">
                     {[1, 2, 3, 4, 5].map((star) => (
@@ -125,11 +127,11 @@ const CustomOrderReview = () => {
                   {rating > 0 && (
                     <p className="text-center mt-2">
                       <strong>
-                        {rating === 1 && 'Poor'}
-                        {rating === 2 && 'Fair'}
-                        {rating === 3 && 'Good'}
-                        {rating === 4 && 'Very Good'}
-                        {rating === 5 && 'Excellent'}
+                        {rating === 1 && t('rateExperience.poor')}
+                        {rating === 2 && t('rateExperience.fair')}
+                        {rating === 3 && t('rateExperience.good')}
+                        {rating === 4 && t('rateExperience.veryGood')}
+                        {rating === 5 && t('rateExperience.excellent')}
                       </strong>
                     </p>
                   )}
@@ -139,33 +141,33 @@ const CustomOrderReview = () => {
                 <div className="mb-4">
                   <label className="form-label fw-bold">
                     <i className="fas fa-comment me-2"></i>
-                    Your Review (Optional)
+                    {t('rateExperience.yourReview')}
                   </label>
                   <textarea
                     className="form-control"
                     rows="6"
                     value={reviewComment}
                     onChange={(e) => setReviewComment(e.target.value)}
-                    placeholder="Share your experience with this custom order. What did you like? Any suggestions for improvement?"
+                    placeholder={t('rateExperience.reviewPlaceholder')}
                   />
-                  <small className="text-muted">Your feedback helps us improve our services</small>
+                  <small className="text-muted">{t('rateExperience.feedbackHelp')}</small>
                 </div>
 
                 {/* Order Summary */}
                 <div className="card bg-light mb-4">
                   <div className="card-body">
-                    <h6 className="card-title">Order Summary</h6>
+                    <h6 className="card-title">{t('rateExperience.orderSummary')}</h6>
                     <div className="row">
                       <div className="col-md-6">
-                        <p className="mb-1"><strong>Product:</strong> {order.productType}</p>
-                        <p className="mb-1"><strong>Material:</strong> {order.materialType}</p>
-                        <p className="mb-0"><strong>Total Cost:</strong> Rs. {(order.totalAmount || order.estimatedCost || 0).toLocaleString()}</p>
+                        <p className="mb-1"><strong>{t('rateExperience.product')}:</strong> {order.productType}</p>
+                        <p className="mb-1"><strong>{t('rateExperience.material')}:</strong> {order.materialType}</p>
+                        <p className="mb-0"><strong>{t('rateExperience.totalCost')}:</strong> Rs. {(order.totalAmount || order.estimatedCost || 0).toLocaleString()}</p>
                       </div>
                       <div className="col-md-6">
-                        <p className="mb-1"><strong>Status:</strong> 
-                          <span className="badge bg-success ms-2">Completed</span>
+                        <p className="mb-1"><strong>{t('rateExperience.status')}:</strong> 
+                          <span className="badge bg-success ms-2">{t('rateExperience.completed')}</span>
                         </p>
-                        <p className="mb-0"><strong>Completed:</strong> {order.completionDate ? new Date(order.completionDate).toLocaleDateString() : '-'}</p>
+                        <p className="mb-0"><strong>{t('rateExperience.completedDate')}:</strong> {order.completionDate ? new Date(order.completionDate).toLocaleDateString() : '-'}</p>
                       </div>
                     </div>
                   </div>
@@ -181,12 +183,12 @@ const CustomOrderReview = () => {
                     {submitting ? (
                       <>
                         <span className="spinner-border spinner-border-sm me-2"></span>
-                        Submitting...
+                        {t('rateExperience.submitting')}
                       </>
                     ) : (
                       <>
                         <i className="fas fa-paper-plane me-2"></i>
-                        Submit Review
+                        {t('rateExperience.submitReview')}
                       </>
                     )}
                   </button>
@@ -195,7 +197,7 @@ const CustomOrderReview = () => {
                     onClick={() => navigate('/Services')}
                     disabled={submitting}
                   >
-                    Skip for Now
+                    {t('rateExperience.skipForNow')}
                   </button>
                 </div>
               </div>

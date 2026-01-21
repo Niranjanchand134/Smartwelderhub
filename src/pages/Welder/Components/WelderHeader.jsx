@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../../Context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { getUserDetailsById } from '../../../services/authService';
+import NotificationDropdownWelder from '../../../components/NotificationDropdownWelder';
+import ChatMessagesDropdown from '../../../components/ChatMessagesDropdown';
 
 const WelderHeader = ({ onToggleSidebar, sidebarCollapsed, onNavigate }) => {
     const { user, logout } = useAuth();
@@ -63,9 +65,7 @@ const WelderHeader = ({ onToggleSidebar, sidebarCollapsed, onNavigate }) => {
     
     const welderData = {
         name: welderName,
-        status: "Available",
-        notificationCount: 5,
-        unreadMessages: 7
+        status: "Available"
     };
 
     // Close dropdown when clicking outside
@@ -122,89 +122,13 @@ const WelderHeader = ({ onToggleSidebar, sidebarCollapsed, onNavigate }) => {
                 {/* Right Section */}
                 <div className="d-flex align-items-center">
                     {/* Notifications */}
-                    <div className="dropdown me-3">
-                        <button className="btn btn-link text-dark position-relative" 
-                                data-bs-toggle="dropdown">
-                            <i className="fas fa-bell"></i>
-                            {welderData.notificationCount > 0 && (
-                                <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                                    {welderData.notificationCount}
-                                </span>
-                            )}
-                        </button>
-                        <div className="dropdown-menu dropdown-menu-end" style={{ width: '300px' }}>
-                            <h6 className="dropdown-header">Notifications</h6>
-                            <a className="dropdown-item d-flex align-items-center" href="#">
-                                <div className="bg-primary rounded-circle p-2 me-2">
-                                    <i className="fas fa-tools text-white"></i>
-                                </div>
-                                <div>
-                                    <small className="d-block">New job assigned</small>
-                                    <small className="text-muted">Custom Gate - John Sharma</small>
-                                </div>
-                            </a>
-                            <a className="dropdown-item d-flex align-items-center" href="#">
-                                <div className="bg-success rounded-circle p-2 me-2">
-                                    <i className="fas fa-rupee-sign text-white"></i>
-                                </div>
-                                <div>
-                                    <small className="d-block">Payment received</small>
-                                    <small className="text-muted">Rs. 25,000 from Sita Rai</small>
-                                </div>
-                            </a>
-                            <a className="dropdown-item d-flex align-items-center" href="#">
-                                <div className="bg-info rounded-circle p-2 me-2">
-                                    <i className="fas fa-robot text-white"></i>
-                                </div>
-                                <div>
-                                    <small className="d-block">AI Design Suggestion</small>
-                                    <small className="text-muted">3 new optimizations available</small>
-                                </div>
-                            </a>
-                            <div className="dropdown-divider"></div>
-                            <a className="dropdown-item text-center small text-primary" href="#">
-                                View All Notifications
-                            </a>
-                        </div>
+                    <div className="me-3">
+                        <NotificationDropdownWelder />
                     </div>
 
                     {/* Messages */}
-                    <div className="dropdown me-3">
-                        <button className="btn btn-link text-dark position-relative" 
-                                data-bs-toggle="dropdown">
-                            <i className="fas fa-comments"></i>
-                            {welderData.unreadMessages > 0 && (
-                                <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
-                                    {welderData.unreadMessages}
-                                </span>
-                            )}
-                        </button>
-                        <div className="dropdown-menu dropdown-menu-end" style={{ width: '300px' }}>
-                            <h6 className="dropdown-header">Messages</h6>
-                            <a className="dropdown-item d-flex align-items-center" href="#">
-                                <div className="bg-warning rounded-circle p-2 me-2">
-                                    <i className="fas fa-user text-white"></i>
-                                </div>
-                                <div>
-                                    <small className="d-block">John Sharma</small>
-                                    <small className="text-muted">Can we add decorative elements?</small>
-                                </div>
-                                <span className="badge bg-primary ms-2">New</span>
-                            </a>
-                            <a className="dropdown-item d-flex align-items-center" href="#">
-                                <div className="bg-success rounded-circle p-2 me-2">
-                                    <i className="fas fa-user text-white"></i>
-                                </div>
-                                <div>
-                                    <small className="d-block">Sita Rai</small>
-                                    <small className="text-muted">When will my grill be ready?</small>
-                                </div>
-                            </a>
-                            <div className="dropdown-divider"></div>
-                            <a className="dropdown-item text-center small text-primary" href="#">
-                                View All Messages
-                            </a>
-                        </div>
+                    <div className="me-3">
+                        <ChatMessagesDropdown onNavigate={onNavigate} />
                     </div>
 
                     {/* Profile Dropdown */}

@@ -1,4 +1,8 @@
+import { useTranslation } from 'react-i18next';
+
 const Footer = () => {
+    const { t } = useTranslation();
+
     return(
         <>
         {/* <!-- Footer Start --> */}
@@ -6,9 +10,9 @@ const Footer = () => {
             <div className="container py-5">
                 <div className="row g-5">
                     <div className="col-lg-3 col-md-6">
-                        <h5 className="text-uppercase text-light mb-4">Our Office</h5>
-                        <p className="mb-2"><i className="fa fa-map-marker-alt text-primary me-3"></i>123 Street, New York, USA</p>
-                        <p className="mb-2"><i className="fa fa-phone-alt text-primary me-3"></i>+012 345 67890</p>
+                        <h5 className="text-uppercase text-light mb-4">{t('footer.ourOffice')}</h5>
+                        <p className="mb-2"><i className="fa fa-map-marker-alt text-primary me-3"></i>Lalitpur, Kumaripati</p>
+                        <p className="mb-2"><i className="fa fa-phone-alt text-primary me-3"></i>+977-9865000000</p>
                         <p className="mb-2"><i className="fa fa-envelope text-primary me-3"></i>info@example.com</p>
                         <div className="d-flex pt-3">
                             <a className="btn btn-square btn-light me-2" href=""><i
@@ -22,24 +26,23 @@ const Footer = () => {
                         </div>
                     </div>
                     <div className="col-lg-3 col-md-6">
-                        <h5 className="text-uppercase text-light mb-4">Quick Links</h5>
-                        <a className="btn btn-link" href="">About Us</a>
-                        <a className="btn btn-link" href="/Contactus">Contact Us</a>
-                        <a className="btn btn-link" href="">Our Services</a>
-                        <a className="btn btn-link" href="">Terms & Condition</a>
-                        <a className="btn btn-link" href="">Support</a>
+                        <h5 className="text-uppercase text-light mb-4">{t('footer.quickLinks')}</h5>
+                        <a className="btn btn-link" href="/aboutus">{t('footer.aboutUs')}</a>
+                        <a className="btn btn-link" href="/Contactus">{t('footer.contactUs')}</a>
+                        <a className="btn btn-link" href="/services">{t('footer.ourServices')}</a>
+                        <a className="btn btn-link" href="/contactus">{t('footer.support')}</a>
                     </div>
                     <div className="col-lg-3 col-md-6">
-                        <h5 className="text-uppercase text-light mb-4">Business Hours</h5>
-                        <p className="text-uppercase mb-0">Monday - Friday</p>
+                        <h5 className="text-uppercase text-light mb-4">{t('footer.businessHours')}</h5>
+                        <p className="text-uppercase mb-0">{t('footer.mondayFriday')}</p>
                         <p>09:00 am - 07:00 pm</p>
-                        <p className="text-uppercase mb-0">Saturday</p>
+                        <p className="text-uppercase mb-0">{t('footer.saturday')}</p>
                         <p>09:00 am - 12:00 pm</p>
-                        <p className="text-uppercase mb-0">Sunday</p>
-                        <p>Closed</p>
+                        <p className="text-uppercase mb-0">{t('footer.sunday')}</p>
+                        <p>{t('footer.closed')}</p>
                     </div>
                     <div className="col-lg-3 col-md-6">
-                        <h5 className="text-uppercase text-light mb-4">Gallery</h5>
+                        <h5 className="text-uppercase text-light mb-4">{t('footer.gallery')}</h5>
                         <div className="row g-1">
                             <div className="col-4">
                                 <img className="img-fluid" src="./assets/image/service-1.jpg" alt=""/>
@@ -71,63 +74,12 @@ const Footer = () => {
             <div className="container">
                 <div className="row">
                     <div className="col text-center text-md-center mb-3 mb-md-0">
-                        &copy; <a className="fw-semi-bold" href="#">Your Site Name</a>, All Right Reserved.
+                        &copy; <a className="fw-semi-bold" href="#">SmartWeld Hub</a>, {t('footer.allRightReserved')}.
                     </div>
                 </div>
             </div>
         </div>
         {/* <!-- Copyright End --> */}
-
-        {/* <!-- Floating Action Buttons --> */}
-        <div className="position-fixed bottom-0 end-0 m-3 m-md-4 d-flex flex-column gap-3" style={{zIndex: '1000'}}>
-            
-            {/* Messenger Message Button with Tooltip */}
-            <div className="position-relative">
-                <a 
-                    href="https://m.me/your-page-username" 
-                    className="btn btn-primary rounded-circle d-flex align-items-center justify-content-center"
-                    style={{
-                        width: '60px', 
-                        height: '60px',
-                        backgroundColor: '#fff',
-                        borderColor: '#fff'
-                    }}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="left"
-                    data-bs-title="Message us on Messenger"
-                >
-                    <i className="fab fa-facebook-messenger fs-4"></i>
-                </a>
-            </div>
-
-            {/* Back to Top Button with Tooltip */}
-            <div className="position-relative">
-                <a 
-                    href="#" 
-                    className="btn btn-primary rounded-circle d-flex align-items-center justify-content-center"
-                    style={{width: '60px', height: '60px'}}
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="left"
-                    data-bs-title="Back to Top"
-                >
-                    <i className="bi bi-arrow-up fs-4"></i>
-                </a>
-            </div>
-        </div>
-
-        {/* <!-- Bootstrap Tooltip Initialization Script --> */}
-        <script dangerouslySetInnerHTML={{
-            __html: `
-            document.addEventListener('DOMContentLoaded', function() {
-                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-                var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
-                    return new bootstrap.Tooltip(tooltipTriggerEl)
-                })
-            })
-            `
-        }} />
         </>
     )
 }

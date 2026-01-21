@@ -1,8 +1,10 @@
 import React from "react";
+import { useTranslation } from 'react-i18next';
 import Header from "./header";
 import Footer from "./Footer";
 
 const ContactUs = () => {
+  const { t } = useTranslation();
   return (
     <>
     <Header/>
@@ -16,18 +18,18 @@ const ContactUs = () => {
             <div className="col-lg-7">
               <div className="bg-white p-5">
                 <h1 className="display-6 text-uppercase mb-3 animated slideInDown">
-                  Contact
+                  {t('contactUs.title')}
                 </h1>
                 <nav aria-label="breadcrumb" className="animated slideInDown">
                   <ol className="breadcrumb justify-content-center mb-0">
                     <li className="breadcrumb-item">
-                      <a href="#">Home</a>
+                      <a href="#">{t('common.home')}</a>
                     </li>
                     <li className="breadcrumb-item">
-                      <a href="#">Pages</a>
+                      <a href="#">{t('common.pages')}</a>
                     </li>
                     <li className="breadcrumb-item active" aria-current="page">
-                      Contact
+                      {t('contactUs.title')}
                     </li>
                   </ol>
                 </nav>
@@ -52,16 +54,14 @@ const ContactUs = () => {
                 data-wow-delay="0.3s"
               >
                 <h1 className="display-6 text-uppercase text-white mb-4">
-                  Have Any Query? Feel Free To Contact Us
+                  {t('contactUs.haveAnyQuery')}
                 </h1>
                 <p
                   className="text-white mb-5 wow fadeIn"
                   data-wow-delay="0.4s"
                 >
-                  The contact form is currently inactive. Get a functional and
-                  working contact form with Ajax & PHP in a few minutes. Just
-                  copy and paste the files, add a little code and you're done.{" "}
-                  <a href="https://htmlcodex.com/contact-form">Download Now</a>.
+                  {t('contactUs.contactFormInactive')}{" "}
+                  <a href="https://htmlcodex.com/contact-form">{t('contactUs.downloadNow')}</a>.
                 </p>
 
                 <div
@@ -72,7 +72,7 @@ const ContactUs = () => {
                     <i className="bi bi-envelope-at text-dark fs-3"></i>
                   </div>
                   <div className="ms-3">
-                    <h6 className="text-white text-uppercase">Mail Us</h6>
+                    <h6 className="text-white text-uppercase">{t('contactUs.mailUs')}</h6>
                     <span className="text-white">info@example.com</span>
                   </div>
                 </div>
@@ -87,7 +87,7 @@ const ContactUs = () => {
                     <i className="bi bi-telephone text-dark fs-3"></i>
                   </div>
                   <div className="ms-3">
-                    <h6 className="text-white text-uppercase">Call Us</h6>
+                    <h6 className="text-white text-uppercase">{t('contactUs.callUs')}</h6>
                     <span className="text-white">+012 345 67890</span>
                   </div>
                 </div>
@@ -99,7 +99,7 @@ const ContactUs = () => {
                 data-wow-delay="0.7s"
               >
                 <div className="bg-white p-5">
-                  <h2 className="text-uppercase mb-4">Contact Us</h2>
+                  <h2 className="text-uppercase mb-4">{t('contactUs.contactUs')}</h2>
                   <div className="row g-3">
                     <div className="col-sm-6">
                       <div className="form-floating">
@@ -107,9 +107,9 @@ const ContactUs = () => {
                           type="text"
                           className="form-control border-0 bg-light"
                           id="name"
-                          placeholder="Your Name"
+                          placeholder={t('contactUs.yourName')}
                         />
-                        <label htmlFor="name">Your Name</label>
+                        <label htmlFor="name">{t('contactUs.yourName')}</label>
                       </div>
                     </div>
                     <div className="col-sm-6">
@@ -118,9 +118,9 @@ const ContactUs = () => {
                           type="email"
                           className="form-control border-0 bg-light"
                           id="mail"
-                          placeholder="Your Email"
+                          placeholder={t('contactUs.yourEmail')}
                         />
-                        <label htmlFor="mail">Your Email</label>
+                        <label htmlFor="mail">{t('contactUs.yourEmail')}</label>
                       </div>
                     </div>
                     <div className="col-sm-6">
@@ -129,9 +129,9 @@ const ContactUs = () => {
                           type="text"
                           className="form-control border-0 bg-light"
                           id="mobile"
-                          placeholder="Your Mobile"
+                          placeholder={t('contactUs.yourMobile')}
                         />
-                        <label htmlFor="mobile">Your Mobile</label>
+                        <label htmlFor="mobile">{t('contactUs.yourMobile')}</label>
                       </div>
                     </div>
                     <div className="col-sm-6">
@@ -140,25 +140,25 @@ const ContactUs = () => {
                           type="text"
                           className="form-control border-0 bg-light"
                           id="subject"
-                          placeholder="Subject"
+                          placeholder={t('contactUs.subject')}
                         />
-                        <label htmlFor="subject">Subject</label>
+                        <label htmlFor="subject">{t('contactUs.subject')}</label>
                       </div>
                     </div>
                     <div className="col-12">
                       <div className="form-floating">
                         <textarea
                           className="form-control border-0 bg-light"
-                          placeholder="Leave a message here"
+                          placeholder={t('contactUs.message')}
                           id="message"
                           style={{ height: "130px" }}
                         ></textarea>
-                        <label htmlFor="message">Message</label>
+                        <label htmlFor="message">{t('contactUs.message')}</label>
                       </div>
                     </div>
                     <div className="col-12 text-center">
                       <button className="btn btn-primary w-100 py-3" type="submit">
-                        Submit Now
+                        {t('contactUs.sendMessage')}
                       </button>
                     </div>
                   </div>

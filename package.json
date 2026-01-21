@@ -17,10 +17,13 @@
     "axios": "^1.13.2",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
+    "i18next": "^24.2.3",
+    "i18next-browser-languagedetector": "^8.2.0",
     "jquery": "^3.7.1",
     "jwt-decode": "^4.0.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-i18next": "^15.7.4",
     "react-router-dom": "^7.9.5",
     "react-toastify": "^11.0.5"
   },

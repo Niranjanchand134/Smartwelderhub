@@ -79,22 +79,36 @@ export const CheckEmail = async ({email})=>{
 }
 
 export const CheckOtp = async ({ email, otp }) => {
-  const response = await axios.post("http://localhost:8080/api/checkOTP", {
-    email,
-    otp
-  });
-  return response.data;
+  try {
+    const response = await axios.post("http://localhost:8080/api/checkOTP", {
+      email,
+      otp
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw error;
+    }
+    throw new Error("Failed to verify OTP. Please try again.");
+  }
 };
 
 export const UpdatePassword = async ({ email, password }) => {
-  const response = await axios.post(
-    `http://localhost:8080/api/updatePassword`,
-    {
-      email, password
+  try {
+    const response = await axios.post(
+      `http://localhost:8080/api/updatePassword`,
+      {
+        email, 
+        password
+      }
+    );
+    return response;
+  } catch (error) {
+    if (error.response) {
+      throw error;
     }
-  );
-  console.log(response);
-  return response;
+    throw new Error("Failed to update password. Please try again.");
+  }
 };
 
 export const getUserDetailsById = async (id)=>{

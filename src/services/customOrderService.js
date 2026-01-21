@@ -245,3 +245,21 @@ export const getOrdersByWelder = async (welderId) => {
   }
 };
 
+export const getWelderDashboard = async (welderId) => {
+  try {
+    const response = await axios.get(`${API_BASE}/welder/${welderId}/dashboard`, getAuthHeaders());
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const getAdminDashboard = async () => {
+  try {
+    const response = await axios.get(`${API_BASE}/admin/dashboard`, getAuthHeaders());
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+

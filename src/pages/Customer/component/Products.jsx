@@ -1,6 +1,7 @@
 // src/components/User/ProductsPage.js
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Header from './header';
 import Footer from './Footer';
 import { getAllProducts } from '../../../services/productService';
@@ -10,6 +11,7 @@ import { useAuth } from "../../../Context/AuthContext";
 
 const ProductsPage = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [products, setProducts] = useState([]);
   const { addToCart, cartItems } = useCart();
   const { user } = useAuth();
@@ -30,19 +32,19 @@ const ProductsPage = () => {
       const data = await getAllProducts();
       setProducts(data || []);
     } catch (error) {
-      ErrorMessageToast(error.message || 'Failed to load products.');
+      ErrorMessageToast(error.message || t('products.failedToLoadProducts'));
     } finally {
       setLoading(false);
     }
   };
 
   // Get unique categories
-  const categories = ['All', ...new Set(products.map(product => product.category || 'Other'))];
+  const categories = [t('common.all'), ...new Set(products.map(product => product.category || 'Other'))];
 
   // Filter and sort products
   const filteredProducts = products
     .filter(product => {
-      const matchesCategory = selectedCategory === 'All' || (product.category || 'Other') === selectedCategory;
+      const matchesCategory = selectedCategory === t('common.all') || (product.category || 'Other') === selectedCategory;
       const matchesSearch =
         product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.description?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -68,7 +70,7 @@ const ProductsPage = () => {
 
   const handleAddToCart = (product) => {
     if (!user) {
-      WarningMessageToast("Please login to add products to cart.");
+      WarningMessageToast(t('products.pleaseLoginToAdd'));
       navigate("/login");
       return;
     }
@@ -76,7 +78,7 @@ const ProductsPage = () => {
     // Check stock availability
     const currentStock = product.stock ?? 0;
     if (currentStock <= 0) {
-      WarningMessageToast(`${product.name} is out of stock.`);
+      WarningMessageToast(`${product.name} ${t('products.outOfStock')}`);
       return;
     }
     
@@ -85,12 +87,12 @@ const ProductsPage = () => {
     const currentCartQuantity = existingCartItem ? existingCartItem.quantity : 0;
     
     if (currentCartQuantity + 1 > currentStock) {
-      WarningMessageToast(`Only ${currentStock} units available for ${product.name}.`);
+      WarningMessageToast(t('products.onlyAvailable', { count: currentStock, name: product.name }));
       return;
     }
     
     addToCart(product, 1);
-    SuccesfulMessageToast(`${product.name} added to cart`);
+    SuccesfulMessageToast(t('products.addedToCart', { name: product.name }));
   };
 
   const viewDetails = (productId) => {
@@ -194,12 +196,12 @@ const ProductsPage = () => {
             <div className="row justify-content-center">
               <div className="col-lg-7">
                 <div className="bg-white p-5">
-                  <h1 className="display-6 text-uppercase mb-3 animated slideInDown">Products</h1>
+                  <h1 className="display-6 text-uppercase mb-3 animated slideInDown">{t('products.title')}</h1>
                   <nav aria-label="breadcrumb animated slideInDown">
                     <ol className="breadcrumb justify-content-center mb-0">
-                      <li className="breadcrumb-item"><a href="#">Home</a></li>
-                      <li className="breadcrumb-item"><a href="#">Pages</a></li>
-                      <li className="breadcrumb-item" aria-current="page">Products</li>
+                      <li className="breadcrumb-item"><a href="#">{t('common.home')}</a></li>
+                      <li className="breadcrumb-item"><a href="#">{t('common.pages')}</a></li>
+                      <li className="breadcrumb-item" aria-current="page">{t('products.title')}</li>
                     </ol>
                   </nav>
                 </div>
@@ -228,7 +230,7 @@ const ProductsPage = () => {
                     <input
                       type="text"
                       className="form-control border-start-0"
-                      placeholder="Search welding products..."
+                      placeholder={t('products.searchProducts')}
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -251,8 +253,8 @@ const ProductsPage = () => {
                           setCurrentPage(1);
                         }}
                       >
-                        {category}
-                        {category !== 'All' && (
+                        {category === t('common.all') ? t('common.all') : category}
+                        {category !== t('common.all') && (
                           <span className="badge bg-light text-dark ms-1">
                             {products.filter(p => p.category === category).length}
                           </span>
@@ -269,23 +271,23 @@ const ProductsPage = () => {
                   <div className="d-flex justify-content-between align-items-center">
                     <div>
                       <h5 className="text-dark mb-1">
-                        {selectedCategory === 'All' ? 'All Products' : selectedCategory}
+                        {selectedCategory === t('common.all') ? t('products.allProducts') : selectedCategory}
                       </h5>
                       <p className="text-muted mb-0 small">
-                        Showing {currentProducts.length} of {filteredProducts.length} products
+                        {t('common.loading')} {currentProducts.length} {t('common.of')} {filteredProducts.length} {t('products.title').toLowerCase()}
                       </p>
                     </div>
                     <div className="d-flex align-items-center gap-2">
-                      <span className="text-muted small">Sort:</span>
+                      <span className="text-muted small">{t('common.sort')}:</span>
                       <select 
                         className="form-select form-select-sm border-gold" 
                         style={{ width: 'auto' }}
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
                       >
-                        <option value="name">Name</option>
-                        <option value="price-low">Price: Low to High</option>
-                        <option value="price-high">Price: High to Low</option>
+                        <option value="name">{t('products.sortByName')}</option>
+                        <option value="price-low">{t('products.sortByPriceLow')}</option>
+                        <option value="price-high">{t('products.sortByPriceHigh')}</option>
                       </select>
                     </div>
                   </div>
@@ -298,26 +300,26 @@ const ProductsPage = () => {
           {loading ? (
             <div className="text-center py-5">
               <div className="spinner-border text-gold" role="status">
-                <span className="visually-hidden">Loading...</span>
+                <span className="visually-hidden">{t('common.loading')}</span>
               </div>
-              <p className="text-muted mt-3">Loading products...</p>
+              <p className="text-muted mt-3">{t('common.loading')} {t('products.title').toLowerCase()}...</p>
             </div>
           ) : (
             <div className="row g-3">
               {currentProducts.length === 0 ? (
                 <div className="col-12 text-center py-5">
                   <i className="fas fa-search fs-1 text-muted mb-3"></i>
-                  <h5 className="text-muted mb-2">No products found</h5>
-                  <p className="text-muted mb-3 small">Try adjusting your search terms</p>
+                  <h5 className="text-muted mb-2">{t('products.noProductsFound')}</h5>
+                  <p className="text-muted mb-3 small">{t('common.search')}</p>
                   <button 
                     className="btn btn-gold btn-sm"
                     onClick={() => {
                       setSearchTerm('');
-                      setSelectedCategory('All');
+                      setSelectedCategory(t('common.all'));
                       setCurrentPage(1);
                     }}
                   >
-                    Reset Filters
+                    {t('common.filter')}
                   </button>
                 </div>
               ) : (
@@ -339,7 +341,7 @@ const ProductsPage = () => {
                           />
                           <div className="position-absolute top-0 end-0 m-2">
                             <span className={`badge ${inStock ? 'bg-success' : 'bg-danger'} px-2 py-1`}>
-                              {statusLabel}
+                              {inStock ? t('products.inStock') : t('products.outOfStock')}
                             </span>
                           </div>
                         </div>
@@ -371,7 +373,7 @@ const ProductsPage = () => {
                                 Rs. {product.price ? Number(product.price).toFixed(2) : '0.00'}
                               </span>
                               <small className={`text-${!inStock ? 'danger' : 'muted'} small`}>
-                                {product.stock ?? 0} units
+                                {product.stock ?? 0} {t('products.units')}
                               </small>
                             </div>
                           </div>
@@ -386,10 +388,10 @@ const ProductsPage = () => {
                               {inStock ? (
                                 <>
                                   <i className="fas fa-cart-plus me-1"></i>
-                                  Add to Cart
+                                  {t('products.addToCart')}
                                 </>
                               ) : (
-                                'Out of Stock'
+                                t('products.outOfStock')
                               )}
                             </button>
                             <button 
@@ -397,7 +399,7 @@ const ProductsPage = () => {
                               onClick={() => viewDetails(product.id)}
                             >
                               <i className="fas fa-eye me-1"></i>
-                              View Details
+                              {t('products.viewDetails')}
                             </button>
                           </div>
                         </div>
@@ -423,7 +425,7 @@ const ProductsPage = () => {
                         disabled={currentPage === 1}
                       >
                         <i className="fas fa-chevron-left me-1"></i>
-                        Previous
+                        {t('common.previous')}
                       </button>
                     </li>
 
@@ -446,7 +448,7 @@ const ProductsPage = () => {
                         onClick={handleNext}
                         disabled={currentPage === totalPages}
                       >
-                        Next
+                        {t('common.next')}
                         <i className="fas fa-chevron-right ms-1"></i>
                       </button>
                     </li>
@@ -456,7 +458,7 @@ const ProductsPage = () => {
                 {/* Page Info */}
                 <div className="text-center mt-2">
                   <small className="text-muted">
-                    Page {currentPage} of {totalPages} • {filteredProducts.length} total products
+                    {t('products.page')} {currentPage} {t('products.of')} {totalPages} • {filteredProducts.length} {t('products.title').toLowerCase()}
                   </small>
                 </div>
               </div>

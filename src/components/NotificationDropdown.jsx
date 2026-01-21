@@ -7,7 +7,10 @@ import {
   getAdminUnreadCount,
   markNotificationAsRead,
   markAllAsReadForUser,
-  markAllAsReadForAdmin
+  markAllAsReadForAdmin,
+  deleteNotification,
+  deleteAllUserNotifications,
+  deleteAllAdminNotifications
 } from '../services/notificationService';
 
 const NotificationDropdown = () => {
@@ -16,6 +19,7 @@ const NotificationDropdown = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -90,6 +94,41 @@ const NotificationDropdown = () => {
       setUnreadCount(0);
     } catch (error) {
       console.error('Failed to mark all as read:', error);
+    }
+  };
+
+  const handleDeleteNotification = async (notificationId, e) => {
+    e.stopPropagation();
+    try {
+      await deleteNotification(notificationId);
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      // Update unread count if the deleted notification was unread
+      const deletedNotification = notifications.find(n => n.id === notificationId);
+      if (deletedNotification && !deletedNotification.isRead) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error('Failed to delete notification:', error);
+    }
+  };
+
+  const handleClearAll = () => {
+    setShowConfirmModal(true);
+  };
+
+  const confirmDeleteAll = async () => {
+    try {
+      if (user?.role === 'ADMIN') {
+        await deleteAllAdminNotifications();
+      } else {
+        await deleteAllUserNotifications();
+      }
+      setNotifications([]);
+      setUnreadCount(0);
+      setShowConfirmModal(false);
+      setIsOpen(false);
+    } catch (error) {
+      console.error('Failed to delete all notifications:', error);
     }
   };
 
@@ -216,14 +255,25 @@ const NotificationDropdown = () => {
         >
           <div className="d-flex justify-content-between align-items-center p-3 border-bottom">
             <h6 className="mb-0 fw-bold">Notifications</h6>
-            {unreadCount > 0 && (
-              <button
-                className="btn btn-sm btn-link text-primary p-0"
-                onClick={handleMarkAllAsRead}
-              >
-                Mark all as read
-              </button>
-            )}
+            <div className="d-flex gap-2">
+              {notifications.length > 0 && (
+                <button
+                  className="btn btn-sm btn-link text-danger p-0"
+                  onClick={handleClearAll}
+                  title="Clear all notifications"
+                >
+                  <i className="fas fa-trash-alt"></i>
+                </button>
+              )}
+              {unreadCount > 0 && (
+                <button
+                  className="btn btn-sm btn-link text-primary p-0"
+                  onClick={handleMarkAllAsRead}
+                >
+                  Mark all as read
+                </button>
+              )}
+            </div>
           </div>
 
           {isLoading ? (
@@ -255,9 +305,19 @@ const NotificationDropdown = () => {
                     <div className="flex-grow-1">
                       <div className="d-flex justify-content-between align-items-start">
                         <h6 className="mb-1 fw-semibold">{notification.title}</h6>
-                        {!notification.isRead && (
-                          <span className="badge bg-primary rounded-pill">New</span>
-                        )}
+                        <div className="d-flex align-items-center gap-2">
+                          {!notification.isRead && (
+                            <span className="badge bg-primary rounded-pill">New</span>
+                          )}
+                          <button
+                            className="btn btn-sm btn-link text-danger p-0"
+                            onClick={(e) => handleDeleteNotification(notification.id, e)}
+                            title="Delete notification"
+                            style={{ fontSize: '0.875rem' }}
+                          >
+                            <i className="fas fa-times"></i>
+                          </button>
+                        </div>
                       </div>
                       <p className="mb-1 small text-muted">{notification.message}</p>
                       <small className="text-muted">{formatDate(notification.createdAt)}</small>
@@ -267,6 +327,52 @@ const NotificationDropdown = () => {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="modal-backdrop-wrapper" style={{ position: 'fixed', inset: 0, zIndex: 1060 }}>
+          <div className="modal-backdrop show" style={{ zIndex: 1060 }}></div>
+          <div className="modal d-block" tabIndex="-1" style={{ zIndex: 1070 }}>
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content">
+                <div className="modal-header border-0 pb-0">
+                  <h5 className="modal-title d-flex align-items-center">
+                    <i className="fas fa-exclamation-triangle text-warning me-2"></i>
+                    Confirm Delete
+                  </h5>
+                  <button 
+                    type="button" 
+                    className="btn-close" 
+                    onClick={() => setShowConfirmModal(false)}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <p className="mb-0">
+                    Are you sure you want to delete all notifications? This action cannot be undone.
+                  </p>
+                </div>
+                <div className="modal-footer border-0 pt-0">
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={() => setShowConfirmModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn btn-danger" 
+                    onClick={confirmDeleteAll}
+                  >
+                    <i className="fas fa-trash-alt me-1"></i>
+                    Delete All
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

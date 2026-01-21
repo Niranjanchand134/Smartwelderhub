@@ -1,0 +1,43 @@
+/* Page Transition Animations */
+.page-transition {
+  width: 100%;
+  min-height: 100vh;
+  will-change: opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0); /* Force hardware acceleration */
+  transition: opacity 0.2s ease-out;
+}
+
+.page-transition-entering {
+  opacity: 1;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.page-transition-exiting {
+  opacity: 0;
+  transition: opacity 0.15s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Prevent flash of unstyled content and ensure smooth background */
+html, body {
+  background-color: #f8f9fa !important; /* Bootstrap bg-light color */
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+#root {
+  background-color: #f8f9fa;
+  min-height: 100vh;
+  position: relative;
+}

@@ -489,7 +489,7 @@ const CustomOrderManagement = ({ onViewJob, onNavigate }) => {
                                 <input
                                     type="text"
                                     className="form-control"
-                                    placeholder="Search jobs by customer, product, order number, or ID..."
+                                    placeholder="Search orders by customer, product, order number, or ID..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
@@ -504,7 +504,7 @@ const CustomOrderManagement = ({ onViewJob, onNavigate }) => {
                                     className={`btn btn-sm ${activeFilter === 'all' ? 'btn-primary' : 'btn-outline-primary'}`}
                                     onClick={() => setActiveFilter('all')}
                                 >
-                                    All Jobs
+                                    All Orders
                                 </button>
                                 <button 
                                     className={`btn btn-sm ${activeFilter === 'new' ? 'btn-warning' : 'btn-outline-warning'}`}
@@ -734,9 +734,9 @@ const CustomOrderManagement = ({ onViewJob, onNavigate }) => {
             {!loading && searchedJobs.length === 0 && (
                 <div className="text-center py-5">
                     <i className="fas fa-inbox fa-3x text-muted mb-3"></i>
-                    <h5 className="text-muted">No jobs found</h5>
+                    <h5 className="text-muted">No orders found</h5>
                     <p className="text-muted">
-                        {searchTerm ? 'No jobs match your search criteria.' : 'There are no jobs in this category.'}
+                        {searchTerm ? 'No orders match your search criteria.' : 'There are no orders in this category.'}
                     </p>
                     {searchTerm && (
                         <button 
@@ -1209,18 +1209,45 @@ const CustomOrderManagement = ({ onViewJob, onNavigate }) => {
                                                     return null;
                                                 })()}
 
-                                                {selectedJobDetails.originalOrder.referenceImageUrl && (
+                                                {(selectedJobDetails.originalOrder.referenceImageUrl || 
+                                                  (selectedJobDetails.originalOrder.designType === 'template' && selectedJobDetails.originalOrder.designTemplate)) && (
                                                     <div className="card mb-3">
                                                         <div className="card-header bg-light">
-                                                            <h6 className="mb-0"><i className="fas fa-image me-2"></i>Reference Image</h6>
+                                                            <h6 className="mb-0">
+                                                                <i className="fas fa-image me-2"></i>
+                                                                {selectedJobDetails.originalOrder.designType === 'template' ? 'Design Template' : 'Reference Image'}
+                                                            </h6>
                                                         </div>
                                                         <div className="card-body text-center">
-                                                            <img
-                                                                src={selectedJobDetails.originalOrder.referenceImageUrl}
-                                                                alt="Reference"
-                                                                className="img-fluid rounded"
-                                                                style={{ maxHeight: '300px' }}
-                                                            />
+                                                            {selectedJobDetails.originalOrder.referenceImageUrl ? (
+                                                                <img
+                                                                    src={selectedJobDetails.originalOrder.referenceImageUrl}
+                                                                    alt={selectedJobDetails.originalOrder.designType === 'template' 
+                                                                        ? `${selectedJobDetails.originalOrder.productType} - ${selectedJobDetails.originalOrder.designTemplate} Design` 
+                                                                        : 'Reference Image'}
+                                                                    className="img-fluid rounded"
+                                                                    style={{ maxHeight: '300px', width: '100%', objectFit: 'contain' }}
+                                                                    onError={(e) => {
+                                                                        // Fallback for design template images
+                                                                        if (selectedJobDetails.originalOrder.designType === 'template' && 
+                                                                            selectedJobDetails.originalOrder.productType && 
+                                                                            selectedJobDetails.originalOrder.designTemplate) {
+                                                                            const fallbackUrl = `https://via.placeholder.com/400x300/007bff/ffffff?text=${encodeURIComponent(selectedJobDetails.originalOrder.productType + ' - ' + selectedJobDetails.originalOrder.designTemplate)}`;
+                                                                            e.target.src = fallbackUrl;
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            ) : selectedJobDetails.originalOrder.designType === 'template' && selectedJobDetails.originalOrder.designTemplate ? (
+                                                                <div className="alert alert-info">
+                                                                    <i className="fas fa-info-circle me-2"></i>
+                                                                    Design Template: <strong>{selectedJobDetails.originalOrder.designTemplate}</strong>
+                                                                </div>
+                                                            ) : null}
+                                                            {selectedJobDetails.originalOrder.designType === 'template' && selectedJobDetails.originalOrder.designTemplate && (
+                                                                <p className="mt-2 mb-0">
+                                                                    <strong>Template:</strong> {selectedJobDetails.originalOrder.designTemplate}
+                                                                </p>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 )}

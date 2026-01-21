@@ -1,7 +1,6 @@
 // components/welder/WelderDashboard.js
 import React, { useState } from 'react';
 import Dashboard from './Components/Dashboard';
-import AIDesigns from './Components/AIDesigns';
 import CustomerChat from './Components/CustomerChat';
 import Materials from './Components/Materials';
 import JobManagement from './Components/CustomOrderManagement';
@@ -10,6 +9,7 @@ import WelderSidebar from './Components/WelderSidebar';
 import WelderHeader from './Components/WelderHeader';
 import CustomOrderManagement from './Components/CustomOrderManagement';
 import Profile from './Components/Profile';
+import CompletedTasks from './Components/CompletedTasks';
 
 const WelderDashboard = () => {
     const [activePage, setActivePage] = useState('dashboard');
@@ -22,8 +22,8 @@ const WelderDashboard = () => {
                 return <Dashboard onViewJob={setSelectedJob} onNavigate={setActivePage} />;
             case 'orders':
                 return <CustomOrderManagement onViewJob={setSelectedJob} onNavigate={setActivePage} />;
-            case 'ai-designs':
-                return <AIDesigns onViewJob={setSelectedJob} />;
+            case 'completed-tasks':
+                return <CompletedTasks onViewJob={setSelectedJob} onNavigate={setActivePage} />;
             case 'customer-chat':   
                 return <CustomerChat />;
             case 'materials':

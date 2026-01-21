@@ -2,6 +2,7 @@ import React, { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { jwtDecode } from "jwt-decode";
+import { useTranslation } from "react-i18next";
 
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import { greeting, loginDetails, UserRegister } from "../../../services/authService";
@@ -17,6 +18,7 @@ import Footer from "../component/Footer";
 
 const LoginRegister = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [isRightPanelActive, setIsRightPanelActive] = useState(false);
   
   // Login state
@@ -77,13 +79,13 @@ const LoginRegister = () => {
     let errorMsg = "";
 
     if (name === "email") {
-      if (!value) errorMsg = "Email is required";
-      else if (!validateEmail(value)) errorMsg = "Enter a valid email";
+      if (!value) errorMsg = t('auth.emailRequired');
+      else if (!validateEmail(value)) errorMsg = t('auth.validEmail');
     }
 
     if (name === "password") {
-      if (!value) errorMsg = "Password is required";
-      else if (value.length < 6) errorMsg = "Password must be at least 6 characters";
+      if (!value) errorMsg = t('auth.passwordRequired');
+      else if (value.length < 6) errorMsg = t('auth.passwordMinLength');
     }
 
     setLoginErrors({ ...loginErrors, [name]: errorMsg });
@@ -104,18 +106,18 @@ const LoginRegister = () => {
     const newErrors = { email: "", password: "" };
 
     if (!loginForm.email) {
-      newErrors.email = "Email is required";
+      newErrors.email = t('auth.emailRequired');
       valid = false;
     } else if (!validateEmail(loginForm.email)) {
-      newErrors.email = "Enter a valid email";
+      newErrors.email = t('auth.validEmail');
       valid = false;
     }
 
     if (!loginForm.password) {
-      newErrors.password = "Password is required";
+      newErrors.password = t('auth.passwordRequired');
       valid = false;
     } else if (loginForm.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+      newErrors.password = t('auth.passwordMinLength');
       valid = false;
     }
 
@@ -178,7 +180,7 @@ const LoginRegister = () => {
       
       // Update auth context
       login(token);
-      SuccesfulMessageToast("Successfully Login.");
+      SuccesfulMessageToast(t('auth.successfullyLogin'));
       
       // Log the decoded token for debugging
       console.log("Login successful - Token decoded:", {
@@ -220,19 +222,19 @@ const LoginRegister = () => {
   const validateRegisterForm = () => {
     const newErrors = {};
 
-    if (!registerForm.name.trim()) newErrors.name = "Name is required";
+    if (!registerForm.name.trim()) newErrors.name = t('auth.nameRequired');
 
-    if (!registerForm.number.trim()) newErrors.contact = "Phone number is required";
+    if (!registerForm.number.trim()) newErrors.contact = t('auth.phoneRequired');
     else if (!validateContact(registerForm.number))
-      newErrors.contact = "Enter a valid Nepali phone number";
+      newErrors.contact = t('auth.validPhone');
 
-    if (!registerForm.email.trim()) newErrors.email = "Email is required";
+    if (!registerForm.email.trim()) newErrors.email = t('auth.emailRequired');
     else if (!validateEmail(registerForm.email))
-      newErrors.email = "Enter a valid email address";
+      newErrors.email = t('auth.validEmail');
 
-    if (!registerForm.password) newErrors.password = "Password is required";
+    if (!registerForm.password) newErrors.password = t('auth.passwordRequired');
     else if (registerForm.password.length < 6)
-      newErrors.password = "Password must be at least 6 characters";
+      newErrors.password = t('auth.passwordMinLength');
 
     setRegisterErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -250,7 +252,7 @@ const LoginRegister = () => {
       setIsRegisterLoading(true);
       const response = await UserRegister(registerFormData);
 
-      SuccesfulMessageToast("Register Successfully!");
+      SuccesfulMessageToast(t('auth.registerSuccessfully'));
 
       // Navigate after a short delay to show success message
       setTimeout(() => {
@@ -311,7 +313,7 @@ const LoginRegister = () => {
               className="d-flex flex-column justify-content-center align-items-center h-100 bg-white px-5 text-center"
               onSubmit={handleRegisterSubmit}
             >
-              <h2 className="fw-bold mb-3">Create Account</h2>
+              <h2 className="fw-bold mb-3">{t('common.createAccount')}</h2>
               
               {/* Social Login - Temporarily Disabled */}
               <div className="d-flex mb-3">
@@ -326,12 +328,12 @@ const LoginRegister = () => {
                   }}
                 >
                   <i className="fab fa-google me-2"></i>
-                  Sign up with Google
+                  {t('auth.signUpWithGoogle')}
                 </button>
               </div>
               
               <span className="mb-3" style={{ fontSize: "12px" }}>
-                or use your email for registration
+                {t('auth.orUseYourEmail')}
               </span>
 
               {/* Register Form Fields */}
@@ -339,7 +341,7 @@ const LoginRegister = () => {
                 type="text"
                 name="name"
                 className={`form-control bg-light border-0 py-2 px-3 mb-2 ${registerErrors.name && "is-invalid"}`}
-                placeholder="Name"
+                placeholder={t('auth.name')}
                 value={registerForm.name}
                 onChange={handleRegisterChange}
                 disabled={isRegisterLoading}
@@ -352,7 +354,7 @@ const LoginRegister = () => {
                 type="text"
                 name="number"
                 className={`form-control bg-light border-0 py-2 px-3 mb-2 ${registerErrors.contact && "is-invalid"}`}
-                placeholder="Phone Number"
+                placeholder={t('auth.phoneNumber')}
                 value={registerForm.number}
                 onChange={handleRegisterChange}
                 disabled={isRegisterLoading}
@@ -365,7 +367,7 @@ const LoginRegister = () => {
                 type="email"
                 name="email"
                 className={`form-control bg-light border-0 py-2 px-3 mb-2 ${registerErrors.email && "is-invalid"}`}
-                placeholder="Email"
+                placeholder={t('auth.email')}
                 value={registerForm.email}
                 onChange={handleRegisterChange}
                 disabled={isRegisterLoading}
@@ -379,7 +381,7 @@ const LoginRegister = () => {
                   type="password"
                   name="password"
                   className={`form-control bg-light border-0 py-2 px-3 ${registerErrors.password && "is-invalid"}`}
-                  placeholder="Password"
+                  placeholder={t('auth.password')}
                   value={registerForm.password}
                   onChange={handleRegisterChange}
                   disabled={isRegisterLoading}
@@ -410,10 +412,10 @@ const LoginRegister = () => {
                       role="status"
                       aria-hidden="true"
                     ></span>
-                    Creating Account...
+                    {t('auth.creatingAccount')}
                   </>
                 ) : (
-                  "Sign Up"
+                  t('common.signup')
                 )}
               </button>
             </form>
@@ -433,7 +435,7 @@ const LoginRegister = () => {
               className="d-flex flex-column justify-content-center align-items-center h-100 bg-white px-5 text-center"
               onSubmit={handleLoginSubmit}
             >
-              <h2 className="fw-bold mb-3">Sign in</h2>
+              <h2 className="fw-bold mb-3">{t('common.signIn')}</h2>
               
               {/* Social Login - Temporarily Disabled */}
               <div className="d-flex mb-3">
@@ -448,12 +450,12 @@ const LoginRegister = () => {
                   }}
                 >
                   <i className="fab fa-google me-2"></i>
-                  Sign in with Google
+                  {t('auth.signInWithGoogle')}
                 </button>
               </div>
               
               <span className="mb-3" style={{ fontSize: "12px" }}>
-                or use your account
+                {t('auth.orUseYourAccount')}
               </span>
 
               {/* Login Form Fields */}
@@ -461,7 +463,7 @@ const LoginRegister = () => {
                 type="email"
                 name="email"
                 className={`form-control bg-light border-0 py-2 px-3 mb-2 ${loginErrors.email && "is-invalid"}`}
-                placeholder="Email"
+                placeholder={t('auth.email')}
                 value={loginForm.email}
                 onChange={handleLoginChange}
                 disabled={isLoginLoading}
@@ -475,7 +477,7 @@ const LoginRegister = () => {
                   type="password"
                   name="password"
                   className={`form-control bg-light border-0 py-2 px-3 ${loginErrors.password && "is-invalid"}`}
-                  placeholder="Password"
+                  placeholder={t('auth.password')}
                   value={loginForm.password}
                   onChange={handleLoginChange}
                   disabled={isLoginLoading}
@@ -488,7 +490,7 @@ const LoginRegister = () => {
               </div>
 
               <a href="/forgetpassword" className="mb-3" style={{ fontSize: "14px" }}>
-                Forgot your password?
+                {t('auth.forgotPassword')}
               </a>
 
               <button
@@ -510,10 +512,10 @@ const LoginRegister = () => {
                       role="status"
                       aria-hidden="true"
                     ></span>
-                    Logging in...
+                    {t('auth.loggingIn')}
                   </>
                 ) : (
-                  "LogIn"
+                  t('common.login')
                 )}
               </button>
             </form>
@@ -543,31 +545,31 @@ const LoginRegister = () => {
             >
               {/* Overlay Left */}
               <div className="position-absolute top-0 start-0 h-100 w-50 d-flex flex-column justify-content-center align-items-center text-center px-5">
-                <h1 className="fw-bold text-white">Welcome Back!</h1>
+                <h1 className="fw-bold text-white">{t('common.welcomeBack')}</h1>
                 <p className="my-3">
-                  To keep connected with us please login with your personal info
+                  {t('auth.toKeepConnected')}
                 </p>
                 <button
                   className="btn rounded-pill border border-white py-2 px-4 text-white fw-bold text-uppercase"
                   style={{ fontSize: "12px", letterSpacing: "1px" }}
                   onClick={() => setIsRightPanelActive(false)}
                 >
-                  Sign In
+                  {t('common.signIn')}
                 </button>
               </div>
 
               {/* Overlay Right */}
               <div className="position-absolute top-0 end-0 h-100 w-50 d-flex flex-column justify-content-center align-items-center text-center px-5">
-                <h1 className="fw-bold text-white">Hello, Friend!</h1>
+                <h1 className="fw-bold text-white">{t('common.helloFriend')}</h1>
                 <p className="my-3">
-                  Enter your personal details and start journey with us
+                  {t('auth.enterPersonalDetails')}
                 </p>
                 <button
                   className="btn rounded-pill border border-white py-2 px-4 text-white fw-bold text-uppercase"
                   style={{ fontSize: "12px", letterSpacing: "1px" }}
                   onClick={() => setIsRightPanelActive(true)}
                 >
-                  Sign Up
+                  {t('common.signup')}
                 </button>
               </div>
             </div>
