@@ -3,6 +3,7 @@ package com.example.smartweldbackend.service;
 import com.example.smartweldbackend.model.DeliveryInfo;
 import com.example.smartweldbackend.model.user;
 import com.example.smartweldbackend.repository.DeliveryInfoRepository;
+import com.example.smartweldbackend.repository.OrderRepository;
 import com.example.smartweldbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,9 @@ public class DeliveryInfoService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private OrderRepository orderRepository;
 
     public DeliveryInfo createDeliveryInfo(DeliveryInfo deliveryInfo, String userEmail) {
         if (userEmail != null && !userEmail.isEmpty()) {
@@ -66,7 +70,24 @@ public class DeliveryInfoService {
         return deliveryInfoRepository.findByUserId(userId);
     }
 
+    public DeliveryInfo getDeliveryInfoById(Long id) {
+        return deliveryInfoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Delivery info not found"));
+    }
+
     public void deleteDeliveryInfo(Long id) {
+        DeliveryInfo deliveryInfo = deliveryInfoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Delivery info not found"));
+        
+        // Check if there are any orders using this delivery info
+        List<com.example.smartweldbackend.model.Order> orders = orderRepository.findByDeliveryInfo(deliveryInfo);
+        if (!orders.isEmpty()) {
+            int orderCount = orders.size();
+            throw new RuntimeException("Cannot delete address: This address is associated with " + orderCount + 
+                (orderCount == 1 ? " order" : " orders") + 
+                ". Please delete or update the orders first.");
+        }
+        
         deliveryInfoRepository.deleteById(id);
     }
 }

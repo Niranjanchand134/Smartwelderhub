@@ -1,7 +1,14 @@
 package com.example.smartweldbackend.service;
 
 import com.example.smartweldbackend.model.CustomOrder;
+import com.example.smartweldbackend.model.MaterialRequest;
+import com.example.smartweldbackend.model.user;
 import com.example.smartweldbackend.repository.CustomOrderRepository;
+import com.example.smartweldbackend.repository.UserRepository;
+import com.example.smartweldbackend.repository.ProductRepository;
+import com.example.smartweldbackend.repository.OrderRepository;
+import com.example.smartweldbackend.repository.MaterialRequestRepository;
+import com.example.smartweldbackend.service.MaterialRequestService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -20,6 +28,24 @@ public class CustomOrderService {
 
     @Autowired
     private CustomOrderRepository customOrderRepository;
+
+    @Autowired
+    private MaterialRequestService materialRequestService;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private ProductRepository productRepository;
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private MaterialRequestRepository materialRequestRepository;
+
+    @Autowired
+    private NotificationService notificationService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -90,12 +116,18 @@ public class CustomOrderService {
     public CustomOrder updateOrderProgress(Long id, Integer progressPercentage) {
         CustomOrder customOrder = getCustomOrderById(id);
         
+        // Store old progress before updating
+        Integer oldProgress = customOrder.getProgressPercentage() != null ? customOrder.getProgressPercentage() : 0;
+        
         // Validate progress percentage
         if (progressPercentage < 0) {
             progressPercentage = 0;
         } else if (progressPercentage > 100) {
             progressPercentage = 100;
         }
+        
+        // Calculate change amount
+        int changeAmount = Math.abs(progressPercentage - oldProgress);
         
         customOrder.setProgressPercentage(progressPercentage);
         
@@ -108,7 +140,25 @@ public class CustomOrderService {
             customOrder.setStatus("READY_FOR_DELIVERY");
         }
         
-        return customOrderRepository.save(customOrder);
+        CustomOrder savedOrder = customOrderRepository.save(customOrder);
+        
+        // Send notification to customer if progress changed by 5% or 10%
+        if (changeAmount > 0 && customOrder.getCustomerId() != null) {
+            // Only notify if change is exactly 5% or 10%
+            if (changeAmount == 5 || changeAmount == 10) {
+                String orderNumber = customOrder.getOrderNumber() != null ? 
+                    customOrder.getOrderNumber() : 
+                    "#" + customOrder.getId().toString();
+                notificationService.notifyCustomerAboutProgressUpdate(
+                    customOrder.getCustomerId(),
+                    orderNumber,
+                    oldProgress,
+                    progressPercentage
+                );
+            }
+        }
+        
+        return savedOrder;
     }
 
     @Transactional
@@ -296,6 +346,286 @@ public class CustomOrderService {
                     }
                 })
                 .collect(Collectors.toList());
+    }
+
+    public Map<String, Object> getWelderDashboardStats(Long welderId) {
+        List<CustomOrder> welderOrders = getCustomOrdersByWelderId(welderId);
+        
+        // Count orders by status
+        long newOrdersCount = welderOrders.stream()
+                .filter(o -> "APPROVED".equals(o.getStatus()) || "PENDING".equals(o.getStatus()))
+                .count();
+        
+        long inProgressCount = welderOrders.stream()
+                .filter(o -> "IN_PROGRESS".equals(o.getStatus()))
+                .count();
+        
+        long readyForDeliveryCount = welderOrders.stream()
+                .filter(o -> "READY_FOR_DELIVERY".equals(o.getStatus()) || "COMPLETED".equals(o.getStatus()))
+                .count();
+        
+        // Get recent orders (last 5)
+        List<Map<String, Object>> newOrders = welderOrders.stream()
+                .filter(o -> "APPROVED".equals(o.getStatus()) || "PENDING".equals(o.getStatus()))
+                .sorted((a, b) -> {
+                    if (a.getCreatedAt() == null) return 1;
+                    if (b.getCreatedAt() == null) return -1;
+                    return b.getCreatedAt().compareTo(a.getCreatedAt());
+                })
+                .limit(5)
+                .map(order -> {
+                    Map<String, Object> orderMap = new HashMap<>();
+                    orderMap.put("id", order.getId());
+                    orderMap.put("orderNumber", order.getOrderNumber());
+                    orderMap.put("customer", order.getCustomerName());
+                    orderMap.put("product", order.getProductType());
+                    orderMap.put("createdAt", order.getCreatedAt());
+                    orderMap.put("status", order.getStatus());
+                    return orderMap;
+                })
+                .collect(Collectors.toList());
+        
+        List<Map<String, Object>> inProgressOrders = welderOrders.stream()
+                .filter(o -> "IN_PROGRESS".equals(o.getStatus()))
+                .sorted((a, b) -> {
+                    if (a.getUpdatedAt() == null) return 1;
+                    if (b.getUpdatedAt() == null) return -1;
+                    return b.getUpdatedAt().compareTo(a.getUpdatedAt());
+                })
+                .limit(5)
+                .map(order -> {
+                    Map<String, Object> orderMap = new HashMap<>();
+                    orderMap.put("id", order.getId());
+                    orderMap.put("orderNumber", order.getOrderNumber());
+                    orderMap.put("customer", order.getCustomerName());
+                    orderMap.put("product", order.getProductType());
+                    orderMap.put("progress", order.getProgressPercentage() != null ? order.getProgressPercentage() : 0);
+                    orderMap.put("status", order.getStatus());
+                    return orderMap;
+                })
+                .collect(Collectors.toList());
+        
+        List<Map<String, Object>> readyOrders = welderOrders.stream()
+                .filter(o -> "READY_FOR_DELIVERY".equals(o.getStatus()) || "COMPLETED".equals(o.getStatus()))
+                .sorted((a, b) -> {
+                    if (a.getUpdatedAt() == null) return 1;
+                    if (b.getUpdatedAt() == null) return -1;
+                    return b.getUpdatedAt().compareTo(a.getUpdatedAt());
+                })
+                .limit(5)
+                .map(order -> {
+                    Map<String, Object> orderMap = new HashMap<>();
+                    orderMap.put("id", order.getId());
+                    orderMap.put("orderNumber", order.getOrderNumber());
+                    orderMap.put("customer", order.getCustomerName());
+                    orderMap.put("product", order.getProductType());
+                    orderMap.put("status", order.getStatus());
+                    return orderMap;
+                })
+                .collect(Collectors.toList());
+        
+        // Get material requirements for the welder
+        List<MaterialRequest> materialRequests = materialRequestService.getMaterialRequestsByWelderId(welderId);
+        
+        // Group material requests by material name and aggregate quantities
+        Map<String, Map<String, Object>> materialMap = new HashMap<>();
+        
+        for (MaterialRequest request : materialRequests) {
+            String materialName = request.getMaterialName();
+            
+            if (!materialMap.containsKey(materialName)) {
+                Map<String, Object> materialData = new HashMap<>();
+                materialData.put("material", materialName);
+                materialData.put("quantity", 0.0);
+                materialData.put("unit", request.getUnit() != null ? request.getUnit() : "");
+                materialData.put("jobs", 0);
+                materialData.put("requests", new ArrayList<MaterialRequest>());
+                materialMap.put(materialName, materialData);
+            }
+            
+            Map<String, Object> materialData = materialMap.get(materialName);
+            Double currentQuantity = (Double) materialData.get("quantity");
+            materialData.put("quantity", currentQuantity + request.getQuantity());
+            
+            Integer currentJobs = (Integer) materialData.get("jobs");
+            materialData.put("jobs", currentJobs + 1);
+            
+            @SuppressWarnings("unchecked")
+            List<MaterialRequest> requests = (List<MaterialRequest>) materialData.get("requests");
+            requests.add(request);
+        }
+        
+        // Convert to list and format for display with status determination
+        List<Map<String, Object>> materialRequirements = materialMap.values().stream()
+                .map(material -> {
+                    @SuppressWarnings("unchecked")
+                    List<MaterialRequest> requests = (List<MaterialRequest>) material.get("requests");
+                    String status = determineMaterialStatus(requests);
+                    
+                    Map<String, Object> formatted = new HashMap<>();
+                    formatted.put("material", material.get("material"));
+                    Double quantity = (Double) material.get("quantity");
+                    String unit = (String) material.get("unit");
+                    formatted.put("quantity", String.format("%.0f %s", quantity, unit != null ? unit : ""));
+                    Integer jobs = (Integer) material.get("jobs");
+                    formatted.put("jobs", jobs + (jobs == 1 ? " order" : " orders"));
+                    formatted.put("status", status);
+                    return formatted;
+                })
+                .limit(10) // Limit to top 10 materials
+                .collect(Collectors.toList());
+        
+        Map<String, Object> dashboardData = new HashMap<>();
+        dashboardData.put("stats", Map.of(
+                "newOrders", newOrdersCount,
+                "inProgress", inProgressCount,
+                "readyForDelivery", readyForDeliveryCount
+        ));
+        dashboardData.put("newOrders", newOrders);
+        dashboardData.put("inProgressOrders", inProgressOrders);
+        dashboardData.put("readyOrders", readyOrders);
+        dashboardData.put("materialRequirements", materialRequirements);
+        
+        return dashboardData;
+    }
+    
+    private String determineMaterialStatus(List<MaterialRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return "Order Needed";
+        }
+        
+        // Check if any are fulfilled
+        boolean hasFulfilled = requests.stream()
+                .anyMatch(r -> "FULFILLED".equals(r.getStatus()));
+        
+        // Check if any are approved
+        boolean hasApproved = requests.stream()
+                .anyMatch(r -> "APPROVED".equals(r.getStatus()));
+        
+        // Check if any are pending
+        boolean hasPending = requests.stream()
+                .anyMatch(r -> "PENDING".equals(r.getStatus()));
+        
+        if (hasFulfilled) {
+            return "In Stock";
+        } else if (hasApproved) {
+            return "Approved";
+        } else if (hasPending) {
+            return "Pending";
+        } else {
+            return "Order Needed";
+        }
+    }
+
+    public Map<String, Object> getAdminDashboardStats() {
+        Map<String, Object> dashboardData = new HashMap<>();
+        
+        // Get all counts
+        long totalProducts = productRepository.count();
+        long totalOrders = orderRepository.count();
+        long totalCustomOrders = customOrderRepository.count();
+        long totalMaterialRequests = materialRequestRepository.count();
+        
+        // Get user counts
+        List<user> allUsers = userRepository.findAll();
+        long totalUsers = allUsers.size();
+        long totalCustomers = allUsers.stream().filter(u -> "USER".equals(u.getRole())).count();
+        long totalWelders = allUsers.stream().filter(u -> "WELDER".equals(u.getRole())).count();
+        long activeWelders = allUsers.stream()
+                .filter(u -> "WELDER".equals(u.getRole()) && 
+                        ("ACTIVE".equals(u.getStatus()) || "VERIFIED".equals(u.getStatus())))
+                .count();
+        
+        // Get custom order counts by status
+        List<CustomOrder> allCustomOrders = customOrderRepository.findAll();
+        long pendingCustomOrders = allCustomOrders.stream()
+                .filter(o -> "PENDING".equals(o.getStatus()))
+                .count();
+        long inProgressCustomOrders = allCustomOrders.stream()
+                .filter(o -> "IN_PROGRESS".equals(o.getStatus()))
+                .count();
+        long completedCustomOrders = allCustomOrders.stream()
+                .filter(o -> "COMPLETED".equals(o.getStatus()) || 
+                            "READY_FOR_DELIVERY".equals(o.getStatus()) ||
+                            "CONFIRMED_BY_CUSTOMER".equals(o.getStatus()) ||
+                            "CLOSED".equals(o.getStatus()))
+                .count();
+        
+        // Get material request counts by status
+        List<MaterialRequest> allMaterialRequests = materialRequestRepository.findAll();
+        long pendingMaterialRequests = allMaterialRequests.stream()
+                .filter(r -> "PENDING".equals(r.getStatus()))
+                .count();
+        long approvedMaterialRequests = allMaterialRequests.stream()
+                .filter(r -> "APPROVED".equals(r.getStatus()))
+                .count();
+        
+        // Get recent custom orders (limit to 5 most recent, or all if less than 5 exist)
+        List<Map<String, Object>> recentCustomOrders = allCustomOrders.stream()
+                .sorted((a, b) -> {
+                    if (a.getCreatedAt() == null) return 1;
+                    if (b.getCreatedAt() == null) return -1;
+                    return b.getCreatedAt().compareTo(a.getCreatedAt());
+                })
+                .limit(5) // Show up to 5 most recent orders
+                .map(order -> {
+                    Map<String, Object> orderMap = new HashMap<>();
+                    orderMap.put("id", order.getId());
+                    orderMap.put("orderNumber", order.getOrderNumber());
+                    orderMap.put("customer", order.getCustomerName());
+                    orderMap.put("product", order.getProductType());
+                    orderMap.put("status", order.getStatus());
+                    orderMap.put("createdAt", order.getCreatedAt());
+                    return orderMap;
+                })
+                .collect(Collectors.toList());
+        
+        // Get recent material requests (last 5)
+        List<Map<String, Object>> recentMaterialRequests = allMaterialRequests.stream()
+                .sorted((a, b) -> {
+                    if (a.getCreatedAt() == null) return 1;
+                    if (b.getCreatedAt() == null) return -1;
+                    return b.getCreatedAt().compareTo(a.getCreatedAt());
+                })
+                .limit(5)
+                .map(request -> {
+                    Map<String, Object> requestMap = new HashMap<>();
+                    requestMap.put("id", request.getId());
+                    requestMap.put("requestNumber", request.getRequestNumber());
+                    requestMap.put("materialName", request.getMaterialName());
+                    requestMap.put("quantity", request.getQuantity());
+                    requestMap.put("unit", request.getUnit());
+                    requestMap.put("status", request.getStatus());
+                    requestMap.put("priority", request.getPriority());
+                    requestMap.put("createdAt", request.getCreatedAt());
+                    // Get welder name
+                    user welder = userRepository.findById(request.getWelderId()).orElse(null);
+                    requestMap.put("welderName", welder != null ? welder.getFullName() : "Unknown");
+                    return requestMap;
+                })
+                .collect(Collectors.toList());
+        
+        // Build stats map
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalProducts", totalProducts);
+        stats.put("totalOrders", totalOrders);
+        stats.put("totalCustomOrders", totalCustomOrders);
+        stats.put("totalMaterialRequests", totalMaterialRequests);
+        stats.put("totalUsers", totalUsers);
+        stats.put("totalCustomers", totalCustomers);
+        stats.put("totalWelders", totalWelders);
+        stats.put("activeWelders", activeWelders);
+        stats.put("pendingCustomOrders", pendingCustomOrders);
+        stats.put("inProgressCustomOrders", inProgressCustomOrders);
+        stats.put("completedCustomOrders", completedCustomOrders);
+        stats.put("pendingMaterialRequests", pendingMaterialRequests);
+        stats.put("approvedMaterialRequests", approvedMaterialRequests);
+        
+        dashboardData.put("stats", stats);
+        dashboardData.put("recentCustomOrders", recentCustomOrders);
+        dashboardData.put("recentMaterialRequests", recentMaterialRequests);
+        
+        return dashboardData;
     }
 }
 

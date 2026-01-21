@@ -6,6 +6,7 @@ import com.example.smartweldbackend.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -105,6 +106,58 @@ public class UserService {
     public user getUserByEmail(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    @Transactional
+    public void updatePassword(String email, String newPassword) {
+        // Find user by email
+        Optional<user> userOptional = userRepository.findByEmail(email);
+        if (userOptional.isEmpty()) {
+            throw new RuntimeException("User not found");
+        }
+        
+        user user = userOptional.get();
+        
+        // Store old password hash for logging (for debugging only)
+        String oldPasswordHash = user.getPassword();
+        
+        // Encode the new password
+        String encodedPassword = passwordEncoder.encode(newPassword);
+        
+        // Update password
+        user.setPassword(encodedPassword);
+        
+        // Save and flush to ensure immediate persistence
+        user savedUser = userRepository.saveAndFlush(user);
+        
+        // Reload user from database to verify persistence
+        userRepository.flush();
+        Optional<user> reloadedUserOptional = userRepository.findByEmail(email);
+        
+        if (reloadedUserOptional.isEmpty()) {
+            throw new RuntimeException("Failed to verify password update - user not found after save");
+        }
+        
+        user reloadedUser = reloadedUserOptional.get();
+        
+        // Verify the password was saved correctly by checking if it matches
+        boolean passwordMatches = passwordEncoder.matches(newPassword, reloadedUser.getPassword());
+        
+        System.out.println("=== PASSWORD UPDATE ===");
+        System.out.println("Email: " + email);
+        System.out.println("Old password hash: " + (oldPasswordHash != null ? oldPasswordHash.substring(0, Math.min(20, oldPasswordHash.length())) + "..." : "null"));
+        System.out.println("New password hash: " + (reloadedUser.getPassword() != null ? reloadedUser.getPassword().substring(0, Math.min(20, reloadedUser.getPassword().length())) + "..." : "null"));
+        System.out.println("Password changed: " + (!oldPasswordHash.equals(reloadedUser.getPassword())));
+        System.out.println("Password verification: " + (passwordMatches ? "SUCCESS" : "FAILED"));
+        System.out.println("========================");
+        
+        if (!passwordMatches) {
+            throw new RuntimeException("Password update verification failed. Please try again.");
+        }
+        
+        if (oldPasswordHash.equals(reloadedUser.getPassword())) {
+            throw new RuntimeException("Password was not updated. Old and new password hashes are the same.");
+        }
     }
 }
 

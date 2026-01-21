@@ -38,10 +38,34 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            // Content Security Policy headers
+            // Note: unsafe-eval is enabled for third-party libraries (jQuery, Bootstrap, OwlCarousel)
+            // Consider removing unsafe-eval in production if possible by updating libraries
+            .headers(headers -> headers
+                .contentSecurityPolicy(csp -> csp
+                    .policyDirectives("default-src 'self'; " +
+                        "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* https://localhost:*; " +
+                        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+                        "font-src 'self' https://fonts.gstatic.com data:; " +
+                        "img-src 'self' data: https: http:; " +
+                        "connect-src 'self' http://localhost:* https://localhost:* https://rc-epay.esewa.com.np https://rc.esewa.com.np; " +
+                        "frame-src 'self' https://rc-epay.esewa.com.np; " +
+                        "object-src 'none'; " +
+                        "base-uri 'self'; " +
+                        "form-action 'self' https://rc-epay.esewa.com.np; " +
+                        "frame-ancestors 'self'")
+                )
+            )
             .authorizeHttpRequests(auth -> auth
                 // Public endpoints - no authentication required
                 .requestMatchers("/userLogin", "/registers", "/", "/test-auth").permitAll()
                 .requestMatchers("/api/admin-setup/**").permitAll() // Allow admin setup endpoints (development only)
+                
+                // Password reset endpoints - must be public
+                .requestMatchers("/api/checkEmail").permitAll()
+                .requestMatchers("/api/checkOTP").permitAll()
+                .requestMatchers("/api/updatePassword").permitAll()
+                
                 .requestMatchers("/api/user/role").authenticated() // Allow authenticated users to check their role
                 .requestMatchers("/api/user/getUserDetailsById/**").authenticated() // Allow authenticated users to get their own profile
                 .requestMatchers("/api/user/updateProfile/**").authenticated() // Allow authenticated users to update their own profile
@@ -64,6 +88,18 @@ public class SecurityConfig {
                 
                 // Delivery info endpoints - authenticated users only
                 .requestMatchers("/api/delivery/**").authenticated()
+                
+                // Material request endpoints - authenticated users only
+                .requestMatchers("/api/material-requests/**").authenticated()
+                
+                // Chat endpoints - authenticated users only
+                .requestMatchers("/api/chat/**").authenticated()
+                
+                // Customer support chat endpoints - authenticated users only
+                .requestMatchers("/api/customer-support/**").authenticated()
+                
+                // Chat image files - allow public read access (images are already uploaded)
+                .requestMatchers("GET", "/api/files/chat-images/**").permitAll()
                 
                 // Product endpoints - allow public read, admin write
                 .requestMatchers("GET", "/api/products/**").permitAll()

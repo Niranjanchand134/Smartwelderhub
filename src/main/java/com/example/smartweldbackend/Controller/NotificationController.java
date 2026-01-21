@@ -289,5 +289,102 @@ public class NotificationController {
                     .body("Failed to mark all as read: " + e.getMessage());
         }
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteNotification(@PathVariable Long id,
+                                                @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
+            }
+
+            notificationService.deleteNotification(id);
+            return ResponseEntity.ok("Notification deleted successfully");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to delete notification: " + e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/user/delete-all")
+    public ResponseEntity<?> deleteAllUserNotifications(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
+            }
+
+            String token = authHeader.substring(7);
+            Long userId = jwtUtil.extractClaim(token, claims -> {
+                Object idObj = claims.get("id");
+                if (idObj instanceof Number) {
+                    return ((Number) idObj).longValue();
+                }
+                return null;
+            });
+
+            if (userId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("User ID not found in token");
+            }
+
+            notificationService.deleteAllUserNotifications(userId);
+            return ResponseEntity.ok("All notifications deleted successfully");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to delete all notifications: " + e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/admin/delete-all")
+    public ResponseEntity<?> deleteAllAdminNotifications(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
+            }
+
+            String token = authHeader.substring(7);
+            String role = jwtUtil.extractClaim(token, claims -> {
+                Object roleObj = claims.get("role");
+                if (roleObj == null) {
+                    return null;
+                }
+                String roleStr = roleObj.toString().trim();
+                return roleStr.isEmpty() ? null : roleStr;
+            });
+
+            // More flexible role check - handle various admin role formats
+            boolean isAdmin = role != null && (
+                "ADMIN".equalsIgnoreCase(role) || 
+                "admin".equalsIgnoreCase(role) ||
+                role.toUpperCase().contains("ADMIN")
+            );
+
+            if (!isAdmin) {
+                System.out.println("Admin access denied. Role from token: '" + role + "'");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("Admin access required. Current role: " + (role != null ? role : "null"));
+            }
+
+            // Get admin user ID
+            Long userId = jwtUtil.extractClaim(token, claims -> {
+                Object idObj = claims.get("id");
+                if (idObj instanceof Number) {
+                    return ((Number) idObj).longValue();
+                }
+                return null;
+            });
+
+            // Delete all admin notifications
+            if (userId != null) {
+                notificationService.deleteAllAdminNotifications(userId);
+            } else {
+                notificationService.deleteAllAdminNotifications(null);
+            }
+            
+            return ResponseEntity.ok("All notifications deleted successfully");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to delete all notifications: " + e.getMessage());
+        }
+    }
 }
 

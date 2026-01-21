@@ -120,5 +120,58 @@ public class DeliveryInfoController {
     public ResponseEntity<List<DeliveryInfo>> getByEmail(@RequestParam String email) {
         return ResponseEntity.ok(deliveryInfoService.getDeliveryInfoByEmail(email));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteDelivery(@PathVariable Long id,
+                                           @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
+            }
+            
+            String token = authHeader.substring(7);
+            String email = jwtUtil.extractEmail(token);
+            
+            // Get user ID from token claims
+            Long userId = jwtUtil.extractClaim(token, claims -> {
+                Object idObj = claims.get("id");
+                if (idObj instanceof Number) {
+                    return ((Number) idObj).longValue();
+                }
+                return null;
+            });
+            
+            if (userId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("User ID not found in token");
+            }
+            
+            // Verify that the delivery info belongs to the user
+            DeliveryInfo deliveryInfo = deliveryInfoService.getDeliveryInfoById(id);
+            if (deliveryInfo == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Delivery info not found");
+            }
+            
+            // Check if delivery info has a user and verify ownership
+            if (deliveryInfo.getUser() == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Delivery info is not associated with a user");
+            }
+            
+            if (!deliveryInfo.getUser().getId().equals(userId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have permission to delete this address");
+            }
+            
+            deliveryInfoService.deleteDeliveryInfo(id);
+            return ResponseEntity.ok("Address deleted successfully");
+        } catch (RuntimeException e) {
+            // Check if it's a constraint violation (orders exist)
+            if (e.getMessage() != null && e.getMessage().contains("associated with existing orders")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+            }
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to delete delivery info: " + e.getMessage());
+        }
+    }
 }
 

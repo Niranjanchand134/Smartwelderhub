@@ -11,6 +11,8 @@ public class CustomOrder {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    private Long customerId; // ID of the user who placed the order
+
     private String customerName;
     private String mobileNumber;
     private String address;
@@ -134,6 +136,14 @@ public class CustomOrder {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public Long getCustomerId() {
+        return customerId;
+    }
+
+    public void setCustomerId(Long customerId) {
+        this.customerId = customerId;
     }
 
     public String getCustomerName() {

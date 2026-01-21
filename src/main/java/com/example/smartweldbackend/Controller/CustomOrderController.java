@@ -4,6 +4,7 @@ import com.example.smartweldbackend.model.CustomOrder;
 import com.example.smartweldbackend.model.user;
 import com.example.smartweldbackend.repository.UserRepository;
 import com.example.smartweldbackend.service.CustomOrderService;
+import com.example.smartweldbackend.util.JwtUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -27,10 +28,37 @@ public class CustomOrderController {
     @Autowired
     private UserRepository userRepository;
 
-    @PostMapping
-    public ResponseEntity<?> createCustomOrder(@RequestBody CustomOrderRequest request) {
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    private Long getUserIdFromToken(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return null;
+        }
         try {
+            String token = authHeader.substring(7);
+            Long userId = jwtUtil.extractClaim(token, claims -> {
+                Object idObj = claims.get("id");
+                if (idObj instanceof Number) {
+                    return ((Number) idObj).longValue();
+                }
+                return null;
+            });
+            return userId;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @PostMapping
+    public ResponseEntity<?> createCustomOrder(
+            @RequestBody CustomOrderRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            Long userId = getUserIdFromToken(authHeader);
+            
             CustomOrder customOrder = new CustomOrder();
+            customOrder.setCustomerId(userId); // Set customer ID from JWT token
             customOrder.setCustomerName(request.getCustomerName());
             customOrder.setMobileNumber(request.getMobileNumber());
             customOrder.setAddress(request.getAddress());
@@ -59,13 +87,93 @@ public class CustomOrderController {
     }
 
     @GetMapping
-    public ResponseEntity<List<CustomOrder>> getAllCustomOrders() {
-        return ResponseEntity.ok(customOrderService.getAllCustomOrders());
+    public ResponseEntity<?> getAllCustomOrders(
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            Long userId = getUserIdFromToken(authHeader);
+            String role = null;
+            
+            // Extract role from token
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                try {
+                    String token = authHeader.substring(7);
+                    role = jwtUtil.extractClaim(token, claims -> {
+                        Object roleObj = claims.get("role");
+                        return roleObj != null ? roleObj.toString() : null;
+                    });
+                } catch (Exception e) {
+                    // Ignore role extraction errors
+                }
+            }
+            
+            List<CustomOrder> allOrders = customOrderService.getAllCustomOrders();
+            
+            // If user is ADMIN, return all orders
+            if (role != null && "ADMIN".equalsIgnoreCase(role)) {
+                return ResponseEntity.ok(allOrders);
+            }
+            
+            // For regular users and welders, filter by customerId or customerName (for old orders)
+            if (userId != null) {
+                // Get user details to match old orders by name
+                user currentUser = userRepository.findById(userId).orElse(null);
+                String userFullName = currentUser != null ? currentUser.getFullName() : null;
+                
+                List<CustomOrder> userOrders = allOrders.stream()
+                    .filter(order -> {
+                        // New orders: match by customerId
+                        if (order.getCustomerId() != null && order.getCustomerId().equals(userId)) {
+                            return true;
+                        }
+                        // Old orders: match by customerName if customerId is null
+                        if (order.getCustomerId() == null && userFullName != null && order.getCustomerName() != null) {
+                            return order.getCustomerName().trim().equalsIgnoreCase(userFullName.trim());
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+                return ResponseEntity.ok(userOrders);
+            }
+            
+            // If no user ID, return empty list for security
+            return ResponseEntity.ok(new ArrayList<>());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to fetch custom orders: " + e.getMessage());
+        }
     }
 
     @GetMapping("/status/{status}")
     public ResponseEntity<List<CustomOrder>> getCustomOrdersByStatus(@PathVariable String status) {
         return ResponseEntity.ok(customOrderService.getCustomOrdersByStatus(status));
+    }
+
+    @GetMapping("/admin/dashboard")
+    public ResponseEntity<?> getAdminDashboard(
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            // Verify admin role
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
+            }
+
+            String token = authHeader.substring(7);
+            String role = jwtUtil.extractClaim(token, claims -> {
+                Object roleObj = claims.get("role");
+                return roleObj != null ? roleObj.toString() : null;
+            });
+
+            if (role == null || !"ADMIN".equalsIgnoreCase(role)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body("Admin access required");
+            }
+
+            Map<String, Object> dashboardData = customOrderService.getAdminDashboardStats();
+            return ResponseEntity.ok(dashboardData);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to fetch admin dashboard data: " + e.getMessage());
+        }
     }
 
     @GetMapping("/{id}")
@@ -149,10 +257,11 @@ public class CustomOrderController {
         try {
             CustomOrder existingOrder = customOrderService.getCustomOrderById(id);
             
-            // Only allow deletion if order is PENDING
-            if (!"PENDING".equals(existingOrder.getStatus())) {
+            // Allow deletion if order is PENDING, CANCELLED, or REJECTED
+            String status = existingOrder.getStatus();
+            if (!"PENDING".equals(status) && !"CANCELLED".equals(status) && !"REJECTED".equals(status)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body("Only pending orders can be deleted");
+                        .body("Only pending, cancelled, or rejected orders can be deleted");
             }
 
             customOrderService.deleteCustomOrder(id);
@@ -392,6 +501,17 @@ public class CustomOrderController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Failed to assign welders: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/welder/{welderId}/dashboard")
+    public ResponseEntity<?> getWelderDashboard(@PathVariable Long welderId) {
+        try {
+            Map<String, Object> dashboardData = customOrderService.getWelderDashboardStats(welderId);
+            return ResponseEntity.ok(dashboardData);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to fetch dashboard data: " + e.getMessage());
         }
     }
 

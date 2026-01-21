@@ -184,5 +184,99 @@ public class NotificationService {
     public void deleteNotification(Long notificationId) {
         notificationRepository.deleteById(notificationId);
     }
+
+    @Transactional
+    public void deleteAllUserNotifications(Long userId) {
+        List<Notification> notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        notificationRepository.deleteAll(notifications);
+    }
+
+    @Transactional
+    public void deleteAllAdminNotifications(Long adminUserId) {
+        if (adminUserId != null) {
+            // Delete admin-specific notifications (USER_REGISTERED, ORDER_PLACED, PAYMENT_CONFIRMED)
+            List<Notification> adminNotifications = notificationRepository.findByTargetRoleOrderByCreatedAtDesc("ADMIN");
+            List<Notification> filteredNotifications = adminNotifications.stream()
+                    .filter(n -> ("USER_REGISTERED".equals(n.getType()) || "ORDER_PLACED".equals(n.getType()) || "PAYMENT_CONFIRMED".equals(n.getType())) &&
+                                "ADMIN".equals(n.getTargetRole()))
+                    .toList();
+            notificationRepository.deleteAll(filteredNotifications);
+        } else {
+            // Delete all admin notifications
+            List<Notification> adminNotifications = notificationRepository.findByTargetRoleOrderByCreatedAtDesc("ADMIN");
+            notificationRepository.deleteAll(adminNotifications);
+        }
+    }
+
+    // Notify admin about new material request
+    public void notifyAdminAboutMaterialRequest(Long welderId, String welderName, String materialName, Double quantity, String unit, Long requestId) {
+        Notification notification = new Notification();
+        notification.setTitle("New Material Request");
+        notification.setMessage("Welder '" + welderName + "' (ID: " + welderId + ") has requested " + quantity + " " + (unit != null ? unit : "") + " of " + materialName + " (Request ID: " + requestId + ")");
+        notification.setType("MATERIAL_REQUEST");
+        notification.setTargetRole("ADMIN");
+        notification.setIsRead(false);
+        notificationRepository.save(notification);
+    }
+
+    // Notify welder about material request approval
+    public void notifyWelderAboutMaterialRequestApproval(Long welderId, String materialName, Long requestId) {
+        user welder = userRepository.findById(welderId).orElse(null);
+        if (welder != null) {
+            Notification notification = new Notification();
+            notification.setTitle("Material Request Approved");
+            notification.setMessage("Your request for " + materialName + " has been approved (Request ID: " + requestId + ")");
+            notification.setType("MATERIAL_REQUEST_APPROVED");
+            notification.setUser(welder);
+            notification.setIsRead(false);
+            notificationRepository.save(notification);
+        }
+    }
+
+    // Notify welder about material request rejection
+    public void notifyWelderAboutMaterialRequestRejection(Long welderId, String materialName, String rejectionReason, Long requestId) {
+        user welder = userRepository.findById(welderId).orElse(null);
+        if (welder != null) {
+            Notification notification = new Notification();
+            notification.setTitle("Material Request Rejected");
+            notification.setMessage("Your request for " + materialName + " has been rejected. Reason: " + (rejectionReason != null ? rejectionReason : "Not specified") + " (Request ID: " + requestId + ")");
+            notification.setType("MATERIAL_REQUEST_REJECTED");
+            notification.setUser(welder);
+            notification.setIsRead(false);
+            notificationRepository.save(notification);
+        }
+    }
+
+    // Notify welder about material request fulfillment
+    public void notifyWelderAboutMaterialRequestFulfillment(Long welderId, String materialName, Long requestId) {
+        user welder = userRepository.findById(welderId).orElse(null);
+        if (welder != null) {
+            Notification notification = new Notification();
+            notification.setTitle("Material Request Fulfilled");
+            notification.setMessage("Your request for " + materialName + " has been fulfilled and is ready for pickup (Request ID: " + requestId + ")");
+            notification.setType("MATERIAL_REQUEST_FULFILLED");
+            notification.setUser(welder);
+            notification.setIsRead(false);
+            notificationRepository.save(notification);
+        }
+    }
+
+    // Notify customer about order progress update
+    public void notifyCustomerAboutProgressUpdate(Long customerId, String orderNumber, Integer oldProgress, Integer newProgress) {
+        user customer = userRepository.findById(customerId).orElse(null);
+        if (customer != null) {
+            int change = newProgress - oldProgress;
+            String changeDirection = change > 0 ? "increased" : "decreased";
+            int changeAmount = Math.abs(change);
+            
+            Notification notification = new Notification();
+            notification.setTitle("Order Progress Updated");
+            notification.setMessage("Your order #" + orderNumber + " progress has been " + changeDirection + " by " + changeAmount + "%. Current progress: " + newProgress + "%");
+            notification.setType("ORDER_PROGRESS_UPDATED");
+            notification.setUser(customer);
+            notification.setIsRead(false);
+            notificationRepository.save(notification);
+        }
+    }
 }
 

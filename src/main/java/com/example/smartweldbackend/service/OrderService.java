@@ -34,7 +34,7 @@ public class OrderService {
         order.setDeliveryInfo(deliveryInfo);
         order.setItemsJson(objectMapper.writeValueAsString(items));
         
-        // Validate and deduct stock for each item in the order
+        // Validate stock for all items
         if (items instanceof List) {
             List<?> itemsList = (List<?>) items;
             
@@ -52,17 +52,24 @@ public class OrderService {
                 }
             }
             
-            // If all validations pass, deduct stock
-            for (Object item : itemsList) {
-                if (item instanceof Map) {
-                    Map<String, Object> itemMap = (Map<String, Object>) item;
-                    Long productId = Long.valueOf(itemMap.get("productId").toString());
-                    Integer quantity = Integer.valueOf(itemMap.get("quantity").toString());
-                    
-                    // Deduct stock
-                    productService.deductStock(productId, quantity);
+            // Only deduct stock for COD (Cash on Delivery) orders
+            // For eSewa/online payments, stock will be deducted after payment verification
+            String paymentMethod = order.getPaymentMethod();
+            if (paymentMethod != null && "COD".equalsIgnoreCase(paymentMethod)) {
+                // Deduct stock immediately for COD orders
+                for (Object item : itemsList) {
+                    if (item instanceof Map) {
+                        Map<String, Object> itemMap = (Map<String, Object>) item;
+                        Long productId = Long.valueOf(itemMap.get("productId").toString());
+                        Integer quantity = Integer.valueOf(itemMap.get("quantity").toString());
+                        
+                        // Deduct stock
+                        productService.deductStock(productId, quantity);
+                    }
                 }
             }
+            // For eSewa and other online payments, stock will be deducted after payment verification
+            // in PaymentController.verifyEsewaPayment()
         }
         
         return orderRepository.save(order);
